@@ -19,3 +19,4 @@ class UserLoginForm(forms.Form):
         'class': 'form-control',
         'placeholder': 'Hasło'
     }))
+

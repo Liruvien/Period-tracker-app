@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Home - Period Tracker App{% endblock %}
+{% block content %}
+
+<div class="container mt-4">
+    <header>
+        <h1>Welcome to the Period Tracker App!</h1>
+        <p>Track your cycles, log your symptoms, and monitor your health in a simple way.</p>
+        <p><a href="{% url 'calendar' %}" class="btn btn-custom">Calendar</a> </p>
+        <p><a href="{% url 'statistics' %}" class="btn btn-custom">Statistics</a> </p>
+        <p><a href="{% url 'knowledge_base' %}" class="btn btn-custom">Knowledge Base</a> </p>
+        <p><a href="{% url 'form' %}" class="btn btn-custom">Cycle Health Form</a> </p>
+    </header>
+
+    <section class="cycle-summary">
+        <h2>Cycle summary</h2>
+        <p><strong>Current cycle phase:</strong> {{ current_phase }}</p>
+        <p><strong>Number of days until expected period:</strong> {{ days_until_next_period }} days</p>
+        <p><strong>Last noted period:</strong> {{ last_period_date }} ({{ last_period_length }} days)</p>
+    </section>
+
+    <section class="reminders">
+        <h2>Reminders</h2>
+        <ul class="list-group">
+        {% for reminder in reminders %}
+            <li class="list-group-item">{{ reminder }}</li>
+        {% endfor %}
+        </ul>
+    </section>
+
+    <section class="motivation">
+        <h2>Motivation quotes</h2>
+        <blockquote class="blockquote">
+            "{{ motivational_quote }}"
+        </blockquote>
+    </section>
+</div>
+{% endblock %}
