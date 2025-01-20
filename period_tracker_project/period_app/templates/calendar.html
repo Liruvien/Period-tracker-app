@@ -1,10 +1,28 @@
 {% extends 'base.html' %}
 {% load static %}
+
 {% block title %}Calendar - Period Tracker App{% endblock %}
+
 {% block content %}
     <div class="container mt-4">
-        <header>
-        <h1>Calendar - Period Tracker App</h1>
-        </header>
+        <h1>Calendar</h1>
+        <div id='calendar'></div>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                var events = {{ events|safe }};
+                console.log(events);
+                var calendarEl = document.getElementById('calendar');
+                var calendar = new FullCalendar.Calendar(calendarEl, {
+                    plugins: [ 'dayGrid' ],
+                    events: events,
+                });
+                calendar.render();
+            });
+        </script>
+
+        {% if not events %}
+            <p>Nie masz jeszcze żadnych danych do wyświetlenia w kalendarzu.</p>
+        {% endif %}
     </div>
 {% endblock %}
