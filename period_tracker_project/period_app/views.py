@@ -8,6 +8,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import render, redirect
 from .forms import UserRegisterForm, UserLoginForm, HealthAndCycleForm
 from .models import HealthAndCycleFormModel, StatisticsCycleInfo
+from django.utils.dateparse import parse_date
 from datetime import timedelta
 
 class RegisterView(CreateView):
@@ -47,92 +48,132 @@ class Home(LoginRequiredMixin, View):
     def get(self, request):
         return render(request, self.template_name)
 
+
 class CalendarView(LoginRequiredMixin, TemplateView):
     login_url = '/login/'
     redirect_field_name = 'next'
     template_name = 'calendar.html'
 
-    def get(self, request, *args, **kwargs):
-        health_data = HealthAndCycleFormModel.objects.filter(user_profile__user=request.user)
-        events = []
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        health_form = HealthAndCycleFormModel.objects.filter(user_profile=self.request.user.userprofile).first()
+        context['health_form'] = health_form
+        context['form'] = HealthAndCycleForm(instance=health_form) if health_form else HealthAndCycleForm()
+        return context
 
-        if health_data.exists():
-            for entry in health_data:
-                if entry.menstruation_phase_start:
-                    events.append({
-                        'title': 'Menstruacja',
-                        'start': entry.menstruation_phase_start.isoformat(),
-                        'end': entry.menstruation_phase_end.isoformat(),
-                        'color': 'red',
-                    })
-                if entry.follicular_phase_start:
-                    events.append({
-                        'title': 'Faza folikularna',
-                        'start': entry.follicular_phase_start.isoformat(),
-                        'end': entry.follicular_phase_end.isoformat(),
-                        'color': 'yellow',
-                    })
-                if entry.ovulation_phase_start:
-                    events.append({
-                        'title': 'Owulacja',
-                        'start': entry.ovulation_phase_start.isoformat(),
-                        'end': entry.ovulation_phase_end.isoformat(),
-                        'color': 'green',
-                    })
-                if entry.luteal_phase_start:
-                    events.append({
-                        'title': 'Faza lutealna',
-                        'start': entry.luteal_phase_start.isoformat(),
-                        'end': entry.luteal_phase_end.isoformat(),
-                        'color': 'blue',
-                    })
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get('action')
+        date_str = request.POST.get('date')
+        selected_date = parse_date(date_str) if date_str else None
 
-        return render(request, self.template_name, {'events': events})
+        health_form, created = HealthAndCycleFormModel.objects.get_or_create(
+            user_profile=request.user.userprofile,
+            defaults={'cycle_length': 28, 'period_length': 5}
+        )
 
-    def calculate_next_period(self, cycle_info):
-        if cycle_info.last_period_start and cycle_info.cycle_length:
-            next_period = cycle_info.last_period_start + timedelta(days=cycle_info.cycle_length)
-            return next_period
-        return None
+        if action == "set_menstruation":
+            if selected_date:
+                health_form.last_period_start = selected_date
+                health_form.period_length = int(request.POST.get('period_length', 5))
+                health_form.menstruation_days = [
+                    (selected_date + timedelta(days=i)).strftime('%Y-%m-%d')
+                    for i in range(health_form.period_length)
+                ]
+                CycleCalculator.calculate_phases(health_form)
+                health_form.save()
 
-    def calculate_fertile_window(self, cycle_info):
-        if cycle_info.last_period_start and cycle_info.cycle_length:
-            ovulation_day = cycle_info.last_period_start + timedelta(days=cycle_info.cycle_length - 14)
-            fertile_window_start = ovulation_day - timedelta(days=5)
-            fertile_window_end = ovulation_day + timedelta(days=1)
-            return fertile_window_start, fertile_window_end
-        return None, None
+        elif action == "edit_menstruation":
+            menstruation_days = request.POST.getlist('menstruation_days[]')
+            if not menstruation_days:
+                health_form.menstruation_days = []
+                health_form.last_period_start = None
+                health_form.period_length = None
+            else:
+                health_form.menstruation_days = menstruation_days
+                dates = [parse_date(day) for day in menstruation_days]
+                health_form.last_period_start = min(dates)
+                health_form.period_length = len(dates)
 
-    def next_period_prediction(self, cycle_info):
-        next_period = self.calculate_next_period(cycle_info)
-        if next_period:
-            return f"Twoja kolejna miesiączka powinna rozpocząć się {next_period.strftime('%d-%m-%Y')}."
-        return "Nie masz wystarczających danych, aby obliczyć przewidywaną datę kolejnej miesiączki."
+            if health_form.last_period_start:
+                CycleCalculator.calculate_phases(health_form)
+            else:
+                health_form.menstruation_phase_start = None
+                health_form.menstruation_phase_end = None
+                health_form.follicular_phase_start = None
+                health_form.follicular_phase_end = None
+                health_form.ovulation_phase_start = None
+                health_form.ovulation_phase_end = None
+                health_form.luteal_phase_start = None
+                health_form.luteal_phase_end = None
 
-    def fertile_window_prediction(self, cycle_info):
-        fertile_window_start, fertile_window_end = self.calculate_fertile_window(cycle_info)
-        if fertile_window_start and fertile_window_end:
-            return f"Twój okres płodny przypada od {fertile_window_start.strftime('%d-%m-%Y')} do {fertile_window_end.strftime('%d-%m-%Y')}."
-        return "Nie masz wystarczających danych, aby obliczyć przewidywany okres płodny."
+            health_form.save()
 
-    def calculate_phases(self, cycle_info):
-        if cycle_info.last_period_start and cycle_info.cycle_length and cycle_info.period_length:
-            menstruation_phase_end = cycle_info.last_period_start + timedelta(days=cycle_info.period_length)
-            follicular_phase_end = cycle_info.last_period_start + timedelta(days=cycle_info.cycle_length - 14)
-            ovulation_phase_start = follicular_phase_end
-            luteal_phase_start = follicular_phase_end + timedelta(days=1)
-            ovulation_phase_end = ovulation_phase_start
-            luteal_phase_end = cycle_info.last_period_start + timedelta(days=cycle_info.cycle_length)
+        elif action == "set_pregnancy":
+            if selected_date:
+                health_form.pregnancy_start = selected_date
+                health_form.pregnancy_end = selected_date + timedelta(days=280)
+                health_form.menstruation_phase_start = None
+                health_form.menstruation_phase_end = None
+                health_form.follicular_phase_start = None
+                health_form.follicular_phase_end = None
+                health_form.ovulation_phase_start = None
+                health_form.ovulation_phase_end = None
+                health_form.luteal_phase_start = None
+                health_form.luteal_phase_end = None
+                health_form.menstruation_days = []
+                health_form.last_period_start = None
+                health_form.period_length = None
+                health_form.save()
 
-            cycle_info.menstruation_phase_start = cycle_info.last_period_start
-            cycle_info.menstruation_phase_end = menstruation_phase_end
-            cycle_info.follicular_phase_start = cycle_info.last_period_start
-            cycle_info.follicular_phase_end = follicular_phase_end
-            cycle_info.ovulation_phase_start = ovulation_phase_start
-            cycle_info.ovulation_phase_end = ovulation_phase_end
-            cycle_info.luteal_phase_start = luteal_phase_start
-            cycle_info.luteal_phase_end = luteal_phase_end
-            cycle_info.save()
+        elif action == "remove_pregnancy":
+            health_form.pregnancy_start = None
+            health_form.pregnancy_end = None
+            if health_form.last_period_start:
+                CycleCalculator.calculate_phases(health_form)
+            health_form.save()
+
+        return redirect('calendar')
+
+class CycleCalculator:
+    @staticmethod
+    def calculate_phases(health_form):
+        if not health_form.last_period_start or not health_form.cycle_length or not health_form.period_length:
+            return False
+
+        start = health_form.last_period_start
+
+        health_form.menstruation_days = [(start + timedelta(days=i)).strftime('%Y-%m-%d') for i in
+                                         range(health_form.period_length)]
+
+        health_form.menstruation_phase_start = start
+        health_form.menstruation_phase_end = start + timedelta(days=health_form.period_length - 1)
+
+        follicular_phase_start = health_form.menstruation_phase_end + timedelta(days=1)
+        follicular_phase_end = follicular_phase_start + timedelta(days=health_form.cycle_length - health_form.period_length - 14)
+
+        ovulation_phase_start = follicular_phase_end + timedelta(days=1)
+        ovulation_phase_end = ovulation_phase_start + timedelta(days=2)
+
+        luteal_phase_start = ovulation_phase_end + timedelta(days=1)
+        luteal_phase_end = start + timedelta(days=health_form.cycle_length - 1)
+
+        health_form.follicular_phase_start = follicular_phase_start
+        health_form.follicular_phase_end = follicular_phase_end
+
+        health_form.ovulation_phase_start = ovulation_phase_start
+        health_form.ovulation_phase_end = ovulation_phase_end
+
+        health_form.luteal_phase_start = luteal_phase_start
+        health_form.luteal_phase_end = luteal_phase_end
+
+        health_form.menstruation_days = []
+
+        if health_form.last_period_start and health_form.period_length:
+            for i in range(health_form.period_length):
+                health_form.menstruation_days.append(health_form.last_period_start + timedelta(days=i))
+
+        health_form.save()
+        return True
 
 class StatisticsView(LoginRequiredMixin, TemplateView):
     login_url = '/login/'
@@ -156,6 +197,42 @@ class KnowledgeBaseView(LoginRequiredMixin, TemplateView):
     template_name = 'knowledge_base.html'
 
     def get(self, request, *args, **kwargs):
+        return render(request, self.template_name)
+
+
+class HormonalHealthView(LoginRequiredMixin, TemplateView):
+    login_url = '/login/'
+    redirect_field_name = 'next'
+    template_name = 'hormonal_health.html'
+
+    def get(self, request):
+        return render(request, self.template_name)
+
+
+class DietImpactView(LoginRequiredMixin, TemplateView):
+    login_url = '/login/'
+    redirect_field_name = 'next'
+    template_name = 'diet_impact.html'
+
+    def get(self, request):
+        return render(request, self.template_name)
+
+
+class SelfCareDuringMenstruationView(LoginRequiredMixin, TemplateView):
+    login_url = '/login/'
+    redirect_field_name = 'next'
+    template_name = 'self_care_menstruation.html'
+
+    def get(self, request):
+        return render(request, self.template_name)
+
+
+class HealthDuringPregnancyView(LoginRequiredMixin, TemplateView):
+    login_url = '/login/'
+    redirect_field_name = 'next'
+    template_name = 'health_during_pregnancy.html'
+
+    def get(self, request):
         return render(request, self.template_name)
 
 

@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.urls import path
-from period_app.views import RegisterView, LoginView, CustomLogoutView, Home, CalendarView, StatisticsView, KnowledgeBaseView, CycleHealthFormView
+from period_app.views import RegisterView, LoginView, CustomLogoutView, Home, CalendarView, StatisticsView, KnowledgeBaseView, CycleHealthFormView, HormonalHealthView, DietImpactView, SelfCareDuringMenstruationView, HealthDuringPregnancyView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -12,5 +12,8 @@ urlpatterns = [
     path('statistics/', StatisticsView.as_view(), name='statistics'),
     path('knowledge-base/', KnowledgeBaseView.as_view(), name='knowledge_base'),
     path('cycle-health-form-view/', CycleHealthFormView.as_view(), name='form'),
-    path('calendar/events/', CalendarView.as_view(), name='calendar_events'),
+    path('hormonalne-zdrowie/', HormonalHealthView.as_view(), name='hormonal_health'),
+    path('dieta-wplywajaca-pozytywnie-na-kobiece-hormony/', DietImpactView.as_view(), name='diet_impact'),
+    path('zaopiekuj-sie-soba-podczas-miesiaczki/', SelfCareDuringMenstruationView.as_view(), name='self_care_menstruation'),
+    path('zdrowie-kobiet-podczas-ciazy/', HealthDuringPregnancyView.as_view(), name='health_during_pregnancy'),
 ]

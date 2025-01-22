@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 
+
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     weight = models.FloatField(null=True, blank=True)
@@ -15,10 +16,9 @@ class HealthAndCycleFormModel(models.Model):
     first_day_of_cycle = models.DateField(null=True, blank=True)
     cycle_length = models.PositiveIntegerField(null=True, blank=True)
     period_length = models.PositiveIntegerField(null=True, blank=True)
+    menstruation_days = models.JSONField(default=list)
     last_period_start = models.DateField(null=True, blank=True)
-    average_pain_level = models.PositiveIntegerField(
-        null=True, blank=True, choices=[(i, str(i)) for i in range(1, 11)]
-    )
+    average_pain_level = models.PositiveIntegerField(null=True, blank=True, choices=[(i, str(i)) for i in range(1, 11)])
     menstruation_phase_start = models.DateField(null=True, blank=True)
     menstruation_phase_end = models.DateField(null=True, blank=True)
     follicular_phase_start = models.DateField(null=True, blank=True)
@@ -30,6 +30,8 @@ class HealthAndCycleFormModel(models.Model):
     allergies = models.TextField(null=True, blank=True)
     medications = models.TextField(null=True, blank=True)
     health_conditions = models.TextField(null=True, blank=True)
+    pregnancy_start = models.DateField(null=True, blank=True)
+    pregnancy_end = models.DateField(null=True, blank=True)
 
     SYMPTOM_CHOICES = [
         ('1', 'Ból brzucha'),
@@ -46,10 +48,10 @@ class HealthAndCycleFormModel(models.Model):
         ('12', 'Zgaga'),
         ('13', 'Obrzęk'),
         ('14', 'Trądzik'),
-        ('15', 'Dusznica'),
+        ('15', 'Dusznosc'),
         ('16', 'Wahania nastroju'),
         ('17', 'Wzdęcia'),
-        ('18', 'Krwawe stolce'),
+        ('18', 'Krwawienie z odbytnicy'),
         ('19', 'Zmęczenie'),
     ]
 
