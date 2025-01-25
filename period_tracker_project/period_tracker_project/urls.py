@@ -1,6 +1,19 @@
 from django.contrib import admin
 from django.urls import path
-from period_app.views import RegisterView, LoginView, CustomLogoutView, Home, CalendarView, StatisticsView, KnowledgeBaseView, CycleHealthFormView, HormonalHealthView, DietImpactView, SelfCareDuringMenstruationView, HealthDuringPregnancyView
+from period_app.views import (
+    RegisterView,
+    LoginView,
+    CustomLogoutView,
+    Home,
+    CalendarView,
+    StatisticsView,
+    KnowledgeBaseView,
+    CycleHealthFormView,
+    HormonalHealthView,
+    DietImpactView,
+    SelfCareDuringMenstruationView,
+    HealthDuringPregnancyView,
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),

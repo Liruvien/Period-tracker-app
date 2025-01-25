@@ -6,20 +6,9 @@
         <header>
             <h1>Statistics - Period Tracker App</h1>
         </header>
-
         {% if has_data %}
             <ul>
                 {% for stat in statistics %}
-                    <li>
-                        Długość cyklu: {{ stat.cycle_length }} dni,
-                        Długość miesiączki: {{ stat.period_length }} dni,
-                        Średni poziom bólu: {{ stat.average_pain_level }},
-                        Objawy: {{ stat.symptoms }},
-                        Nastrój: {{ stat.mood }},
-                        Alergie: {{ stat.allergies|default:"Brak" }},
-                        Leki: {{ stat.medications|default:"Brak" }},
-                        Stan zdrowia: {{ stat.health_conditions|default:"Brak" }}
-                    </li>
                 {% endfor %}
             </ul>
         {% else %}

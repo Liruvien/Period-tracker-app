@@ -1,40 +1,118 @@
 from django import forms
-from django.contrib.auth.forms import UserCreationForm
-from django.contrib.auth.models import User
 from .models import HealthAndCycleFormModel
+from django.utils import timezone
+from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import UserCreationForm
 
-class UserRegisterForm(UserCreationForm):
-    email = forms.EmailField()
 
+class CustomUserCreationForm(UserCreationForm):
+    """
+    User creation form.
+    """
+    email = forms.EmailField(
+        label="Email",
+        max_length=254,
+        widget=forms.EmailInput(attrs={'class': 'form-control'}),
+        help_text="Enter email."
+    )
     class Meta:
-        model = User
+        model = get_user_model()
         fields = ['username', 'email', 'password1', 'password2']
+        widgets = {
+            'username': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.email = self.cleaned_data['email']
+        user.set_password(self.cleaned_data["password1"])
+
+        if commit:
+            user.save()
+        return user
 
 
 class UserLoginForm(forms.Form):
-    username = forms.CharField(widget=forms.TextInput(attrs={
-        'class': 'form-control',
-        'placeholder': 'Nazwa użytkownika'
-    }))
-    password = forms.CharField(widget=forms.PasswordInput(attrs={
-        'class': 'form-control',
-        'placeholder': 'Hasło'
-    }))
+    """
+    User login form.
+    """
+    username = forms.CharField(
+        label="Username",
+        max_length=150,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Username',
+        })
+    )
+
+    password = forms.CharField(
+        label="Password",
+        widget=forms.PasswordInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Password',
+        })
+    )
 
 
 class HealthAndCycleForm(forms.ModelForm):
+    """
+    Form for tracking health and menstrual cycle details.
+    """
+    PAIN_LEVEL_CHOICES = [(i, str(i)) for i in range(1, 11)]
     class Meta:
         model = HealthAndCycleFormModel
         fields = [
             'first_day_of_cycle', 'cycle_length', 'period_length',
             'last_period_start', 'average_pain_level',
             'menstruation_phase_start', 'menstruation_phase_end',
-            'follicular_phase_start', 'follicular_phase_end',
-            'ovulation_phase_start', 'ovulation_phase_end',
-            'luteal_phase_start', 'luteal_phase_end',
             'allergies', 'medications', 'health_conditions',
-            'symptoms', 'mood'
+            'daily_symptoms', 'daily_mood', 'date', 'event'
         ]
+        widgets = {
+            'user_profile': forms.HiddenInput()
+        }
+
+    date = forms.DateField(
+        label="Data wydarzenia",
+        required=True,
+        widget=forms.DateInput(attrs={'type': 'date'})
+    )
+
+    event = forms.CharField(
+        label="Tytuł wydarzenia",
+        required=True,
+        widget=forms.TextInput(attrs={'placeholder': 'Wpisz nazwę wydarzenia'})
+    )
+
+    first_day_of_cycle = forms.DateField(
+        label="Data wydarzenia",
+        required=True,
+        widget=forms.DateInput(attrs={'type': 'date'})
+    )
+
+    last_period_start = forms.DateField(
+        label="Data rozpoczęcia ostatniej miesiączki",
+        required=False,
+        widget=forms.DateInput(attrs={'type': 'date'})
+    )
+
+    menstruation_phase_start = forms.DateField(
+        label="Początek miesiączki",
+        widget=forms.DateInput(attrs={'type': 'date'}),
+        required=False
+    )
+
+    menstruation_phase_end = forms.DateField(
+        label="Koniec miesiączki",
+        widget=forms.DateInput(attrs={'type': 'date'}),
+        required=False
+    )
+
+    period_length = forms.IntegerField(
+        label="Długość miesiączki (dni)",
+        required=False,
+        min_value=1,
+        widget=forms.NumberInput(attrs={'placeholder': 'Wprowadź długość miesiączki'})
+    )
 
     cycle_length = forms.IntegerField(
         label="Długość cyklu (dni)",
@@ -42,23 +120,11 @@ class HealthAndCycleForm(forms.ModelForm):
         min_value=1,
         widget=forms.NumberInput(attrs={'placeholder': 'Wprowadź długość cyklu'})
     )
-    period_length = forms.IntegerField(
-        label="Długość miesiączki (dni)",
-        required=False,
-        min_value=1,
-        widget=forms.NumberInput(attrs={'placeholder': 'Wprowadź długość miesiączki'})
-    )
-    last_period_start = forms.DateField(
-        label="Data rozpoczęcia ostatniej miesiączki",
-        required=False,
-        widget=forms.DateInput(attrs={'type': 'date'})
-    )
-    average_pain_level = forms.IntegerField(
+    average_pain_level = forms.ChoiceField(
         label="Średni poziom bólu (1-10)",
         required=False,
-        min_value=1,
-        max_value=10,
-        widget=forms.NumberInput(attrs={'placeholder': 'Wprowadź średni poziom bólu'})
+        widget=forms.NumberInput(attrs={'placeholder': 'Wprowadź średni poziom bólu'}),
+        choices=PAIN_LEVEL_CHOICES,
     )
 
     SYMPTOM_CHOICES = [
@@ -76,10 +142,10 @@ class HealthAndCycleForm(forms.ModelForm):
         ('12', 'Zgaga'),
         ('13', 'Obrzęk'),
         ('14', 'Trądzik'),
-        ('15', 'Dusznica'),
+        ('15', 'Dusznosci'),
         ('16', 'Wahania nastroju'),
         ('17', 'Wzdęcia'),
-        ('18', 'Krwawe stolce'),
+        ('18', 'Krwawienie zastepcze'),
         ('19', 'Zmęczenie'),
     ]
 
@@ -93,22 +159,22 @@ class HealthAndCycleForm(forms.ModelForm):
         ('7', 'Irytacja'),
         ('8', 'Gniew'),
         ('9', 'Radość'),
-        ('10', 'Smutek'),
+        ('10', 'Placz'),
         ('11', 'Strach'),
         ('12', 'Złość'),
         ('13', 'Wstręt'),
-        ('14', 'Smutek'),
+        ('14', 'Rozpacz'),
         ('15', 'Panika'),
     ]
 
-    mood = forms.MultipleChoiceField(
+    daily_mood = forms.MultipleChoiceField(
         label="Nastrój",
         required=False,
         widget=forms.CheckboxSelectMultiple,
         choices=MOOD_CHOICES,
     )
 
-    symptoms = forms.MultipleChoiceField(
+    daily_symptoms = forms.MultipleChoiceField(
         label="Objawy",
         required=False,
         widget=forms.CheckboxSelectMultiple,
@@ -131,12 +197,15 @@ class HealthAndCycleForm(forms.ModelForm):
         widget=forms.Textarea(attrs={'placeholder': 'Opisz stan zdrowia', 'rows': 3})
     )
 
-    def clean(self):
-        cleaned_data = super().clean()
-        cycle_length = cleaned_data.get('cycle_length')
-        period_length = cleaned_data.get('period_length')
-
-        if cycle_length and period_length and period_length > cycle_length:
-            self.add_error('period_length', "Długość miesiączki nie może być większa niż długość cyklu.")
-
-        return cleaned_data
+    def __init__(self, *args, **kwargs):
+        """
+        Initialize form with default date.
+        Args:
+            *args: Positional arguments
+            **kwargs: Keyword arguments
+        """
+        initial_date = kwargs.get('initial', {}).get('date', timezone.now().date())
+        if 'initial' not in kwargs:
+            kwargs['initial'] = {}
+        kwargs['initial']['date'] = initial_date
+        super().__init__(*args, **kwargs)

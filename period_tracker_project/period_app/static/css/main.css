@@ -1,0 +1,45 @@
+.phase-legend {
+    margin: 20px 0;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    text-align: center;
+}
+
+.phase-legend-item {
+    display: inline-block;
+    margin-right: 20px;
+}
+
+.color-box {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    margin-right: 5px;
+    vertical-align: middle;
+}
+
+.phase-legend-item span {
+    display: inline-block;
+    margin-top: 5px;
+}
+
+.phase-legend-menstruation {
+    background-color: #ff4d4d;
+}
+
+.phase-legend-follicular-phase {
+    background-color: #ffb366;
+}
+
+.phase-legend-ovulation {
+    background-color: #99ff99;
+}
+
+.phase-legend-luteal-phase {
+    background-color: #cc99ff;
+}
+
+.phase-legend-pregnancy {
+    background-color: #ffff99;
+}

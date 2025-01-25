@@ -1,28 +1,140 @@
 {% extends 'base.html' %}
+{% block title %} Cycle Calendar {% endblock %}
 {% load static %}
-
-{% block title %}Calendar - Period Tracker App{% endblock %}
-
 {% block content %}
-    <div class="container mt-4">
-        <h1>Calendar</h1>
-        <div id='calendar'></div>
-
-        <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                var events = {{ events|safe }};
-                console.log(events);
-                var calendarEl = document.getElementById('calendar');
-                var calendar = new FullCalendar.Calendar(calendarEl, {
-                    plugins: [ 'dayGrid' ],
-                    events: events,
-                });
-                calendar.render();
-            });
-        </script>
-
-        {% if not events %}
-            <p>Nie masz jeszcze żadnych danych do wyświetlenia w kalendarzu.</p>
-        {% endif %}
+<div class="container mt-4">
+    <div class="row mb-3">
+        <div class="col">
+            <a href="{% url 'home' %}" class="btn btn-primary">Strona główna</a>
+            <a href="{% url 'knowledge_base' %}" class="btn btn-info">Baza wiedzy</a>
+            <a href="{% url 'form' %}" class="btn btn-success">Formularz zdrowia cyklu</a>
+        </div>
     </div>
+    <h1 class="text-center">Kalendarz cyklu</h1>
+    <div class="phase-legend text-center">
+        <div class="phase-legend-item">
+            <span class="color-box" style="background-color: #ff4d4d;"></span>
+            <span>Miesiączka</span>
+        </div>
+        <div class="phase-legend-item">
+            <span class="color-box" style="background-color: #ffb366;"></span>
+            <span>Faza folikularna</span>
+        </div>
+        <div class="phase-legend-item">
+            <span class="color-box" style="background-color: #99ff99;"></span>
+            <span>Owulacja</span>
+        </div>
+        <div class="phase-legend-item">
+            <span class="color-box" style="background-color: #cc99ff;"></span>
+            <span>Faza lutealna</span>
+        </div>
+        <div class="phase-legend-item">
+            <span class="color-box" style="background-color: #ffff99;"></span>
+            <span>Ciąża</span>
+        </div>
+    </div>
+    <div id="calendar">
+        {% csrf_token %}
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let calendarEl = document.getElementById('calendar');
+    let calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        locale: 'pl',
+        events: function(fetchInfo, successCallback, failureCallback) {
+            fetch(window.location.href, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                successCallback(data);
+            })
+            .catch(error => {
+                console.error('Błąd ładowania danych:', error);
+                failureCallback(error);
+            });
+        },
+        selectable: true,
+        dateClick: function(info) {
+            document.getElementById('selectedDate').value = info.dateStr;
+            let actionModal = new bootstrap.Modal(document.getElementById('actionModal'));
+            actionModal.show();
+        },
+        eventClick: function(info) {
+            console.log('Event clicked', info);
+            let modalBody = document.querySelector('#eventModal .modal-body #eventDetails');
+            modalBody.innerHTML = `
+                <h5>Wydarzenie: ${info.event.title}</h5>
+                <p><strong>Data:</strong> ${info.event.start.toISOString().split('T')[0]}</p>
+                <p><strong>Początek cyklu:</strong> ${info.event.extendedProps.first_day_of_cycle || 'Brak danych'}</p>
+                <p><strong>Długość cyklu:</strong> ${info.event.extendedProps.cycle_length || 'Brak danych'}</p>
+                <p><strong>Długość miesiączki:</strong> ${info.event.extendedProps.period_length || 'Brak danych'}</p>
+                <p><strong>Objawy:</strong> ${info.event.extendedProps.daily_symptoms ? info.event.extendedProps.daily_symptoms.join(', ') : 'Brak objawów'}</p>
+                <p><strong>Alergie:</strong> ${info.event.extendedProps.allergies || 'Brak alergii'}</p>
+                <p><strong>Leki:</strong> ${info.event.extendedProps.medications || 'Brak leków'}</p>
+                <p><strong>Stan zdrowia:</strong> ${info.event.extendedProps.health_conditions || 'Brak danych'}</p>
+                <p><strong>Nastrój:</strong> ${info.event.extendedProps.daily_mood ? info.event.extendedProps.daily_mood.join(', ') : 'Brak nastroju'}</p>
+            `;
+            let eventModal = new bootstrap.Modal(document.getElementById('eventModal'));
+            let currentEvent = info.event;
+
+            document.getElementById('editEventBtn').onclick = function() {
+                window.location.href = `/cycle-health-form-view/?event_id=${currentEvent.id}`;
+            };
+            document.getElementById('deleteEventBtn').onclick = function() {
+                fetch('/calendar/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: `action=delete&event_id=${currentEvent.id}`
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message) {
+                        currentEvent.remove();
+                        eventModal.hide();
+                    } else {
+                        alert('Błąd podczas usuwania wydarzenia');
+                    }
+                });
+            };
+
+            eventModal.show();
+        },
+        eventDrop: function(info) {
+            fetch('/update-event/' + info.event.id + '/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({
+                    start: info.event.start.toISOString(),
+                    end: info.event.end ? info.event.end.toISOString() : null
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    alert('Nie udało się zaktualizować wydarzenia.');
+                    info.revert();
+                }
+            })
+            .catch(error => {
+                console.error('Błąd:', error);
+                info.revert();
+            });
+        }
+    });
+    calendar.render();
+});
+</script>
 {% endblock %}

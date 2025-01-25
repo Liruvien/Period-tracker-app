@@ -1,89 +1,37 @@
 {% extends 'base.html' %}
-
 {% block title %} Cycle Health Form {% endblock %}
-
+{% load static %}
 {% block content %}
 <div class="container mt-5 main-content">
     <h2>Cycle Health Form</h2>
-    <form method="post">
-        {% csrf_token %}
+<form method="post" action="{% url 'form' %}">
+    {% csrf_token %}
+    {% for field in form %}
         <div class="mb-3">
-            {{ form.cycle_length.label }}
-            {{ form.cycle_length }}
-            {% if form.cycle_length.errors %}
-                <div class="text-danger">{{ form.cycle_length.errors }}</div>
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.errors %}
+                <div class="text-danger">
+                    {% for error in field.errors %}
+                        <p>{{ error }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            {% if field.help_text %}
+                <small class="form-text text-muted">{{ field.help_text }}</small>
             {% endif %}
         </div>
-
-        <div class="mb-3">
-            {{ form.period_length.label }}
-            {{ form.period_length }}
-            {% if form.period_length.errors %}
-                <div class="text-danger">{{ form.period_length.errors }}</div>
-            {% endif %}
-        </div>
-
-        <div class="mb-3">
-            {{ form.last_period_start.label }}
-            {{ form.last_period_start }}
-            {% if form.last_period_start.errors %}
-                <div class="text-danger">{{ form.last_period_start.errors }}</div>
-            {% endif %}
-        </div>
-
-        <div class="mb-3">
-            {{ form.average_pain_level.label }}
-            {{ form.average_pain_level }}
-            {% if form.average_pain_level.errors %}
-                <div class="text-danger">{{ form.average_pain_level.errors }}</div>
-            {% endif %}
-        </div>
-
-        <div class="mb-3">
-            {{ form.symptoms.label }}
-            {{ form.symptoms }}
-            {% if form.symptoms.errors %}
-                <div class="text-danger">{{ form.symptoms.errors }}</div>
-            {% endif %}
-            <small class="form-text text-muted">{{ form.symptoms.help_text }}</small>
-        </div>
-
-        <div class="mb-3">
-            {{ form.mood.label }}
-            {{ form.mood }}
-            {% if form.mood.errors %}
-                <div class="text-danger">{{ form.mood.errors }}</div>
-            {% endif %}
-            <small class="form-text text-muted">{{ form.mood.help_text }}</small>
-        </div>
-
-        <div class="mb-3">
-            {{ form.allergies.label }}
-            {{ form.allergies }}
-            {% if form.allergies.errors %}
-                <div class="text-danger">{{ form.allergies.errors }}</div>
-            {% endif %}
-        </div>
-
-        <div class="mb-3">
-            {{ form.medications.label }}
-            {{ form.medications }}
-            {% if form.medications.errors %}
-                <div class="text-danger">{{ form.medications.errors }}</div>
-            {% endif %}
-        </div>
-
-        <div class="mb-3">
-            {{ form.health_conditions.label }}
-            {{ form.health_conditions }}
-            {% if form.health_conditions.errors %}
-                <div class="text-danger">{{ form.health_conditions.errors }}</div>
-            {% endif %}
-        </div>
-        <div>
-            <button type="submit" class="btn btn-custom">Zapisz</button>
-        </div>
-
-    </form>
+    {% endfor %}
+    <button type="submit" class="btn btn-custom">Zapisz</button>
+</form>
 </div>
+{% if form.errors %}
+    <div class="alert alert-danger mt-3">
+        <strong>Errors in form..</strong>
+    </div>
+{% endif %}
+{% block scripts %}
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr" defer></script>
+{% endblock %}
 {% endblock %}
