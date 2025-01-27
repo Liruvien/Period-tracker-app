@@ -8,11 +8,41 @@
             <a href="{% url 'home' %}" class="btn btn-primary">Strona główna</a>
             <a href="{% url 'knowledge_base' %}" class="btn btn-info">Baza wiedzy</a>
             <a href="{% url 'form' %}" class="btn btn-success">Formularz zdrowia cyklu</a>
+            <a href="{% url 'statistics' %}" class="btn btn-warning">Statystyki</a>
+        </div>
+
+    </div>
+    <div class="row mb-3">
+        <div class="col">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Legenda faz cyklu</h5>
+                    <div class="d-flex flex-wrap gap-3">
+                        <div class="d-flex align-items-center">
+                            <div class="me-2" style="width: 20px; height: 20px; background-color: red;"></div>
+                            <span>Faza menstruacji</span>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <div class="me-2" style="width: 20px; height: 20px; background-color: green;"></div>
+                            <span>Faza folikularna</span>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <div class="me-2" style="width: 20px; height: 20px; background-color: orange;"></div>
+                            <span>Faza owulacji</span>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <div class="me-2" style="width: 20px; height: 20px; background-color: purple;"></div>
+                            <span>Faza lutealna</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     <h1 class="text-center">Kalendarz cyklu</h1>
     <div id="calendar">{% csrf_token %}</div>
 </div>
+
 <div class="modal fade" id="addEventModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -26,6 +56,7 @@
         </div>
     </div>
 </div>
+
 <div class="modal fade" id="showEventModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -43,113 +74,201 @@
     </div>
 </div>
 {% endblock %}
+
 {% block extra_js %}
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.10.1/main.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.10.1/main.min.js"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const calendarEl = document.getElementById('calendar');
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-        let currentEventId = null;
-        const calendar = new FullCalendar.Calendar(calendarEl, {
-            initialView: 'dayGridMonth',
-            locale: 'pl',
-            headerToolbar: {
-                left: 'prev,next today',
-                center: 'title',
-                right: 'dayGridMonth,timeGridWeek'
-            },
-            selectable: true,
-            dateClick: function(info) {
-                const selectedDate = info.dateStr;
-                document.getElementById('addEventLink').href = `/cycle-health-form-view/?date=${selectedDate}`;
-                new bootstrap.Modal(document.getElementById('addEventModal')).show();
-            },
-            eventDidMount: function(info) {
-                info.el.style.cursor = 'pointer';
-            },
-            eventClick: function(info) {
-                currentEventId = info.event.id;
-                let details = '';
-                const fields = {
-                    'Event': info.event.title,
-                    'Date': info.event.start ? info.event.start.toLocaleDateString('pl-PL') : null,
-                    'Cycle length': info.event.extendedProps.cycle_length,
-                    'Period length': info.event.extendedProps.period_length,
-                    'Average pain level': info.event.extendedProps.average_pain_level,
-                    'Daily symptoms': info.event.extendedProps.daily_symptoms,
-                    'Daily mood': info.event.extendedProps.daily_mood,
-                    'Allergies': info.event.extendedProps.allergies,
-                    'Medications': info.event.extendedProps.medications,
-                    'Health condition': info.event.extendedProps.health_condition
-                };
-                for (const [label, value] of Object.entries(fields)) {
-                    if (value) {
-                        if (Array.isArray(value)) {
-                            details += `<p><strong>${label}:</strong> ${value.join(', ')}</p>`;
-                        } else {
-                            details += `<p><strong>${label}:</strong> ${value}</p>`;
-                        }
+document.addEventListener('DOMContentLoaded', function() {
+    const calendarEl = document.getElementById('calendar');
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    let currentEventId = null;
+
+    function calculatePhasesForDay(date, cycleData) {
+        if (!cycleData.first_day_of_cycle || !cycleData.cycle_length || !cycleData.period_length) {
+            return null;
+        }
+
+        const currentDate = new Date(date);
+        const firstDay = new Date(cycleData.first_day_of_cycle);
+        const cycleLength = parseInt(cycleData.cycle_length);
+        const periodLength = parseInt(cycleData.period_length);
+        const yearInFuture = new Date(firstDay);
+        yearInFuture.setFullYear(yearInFuture.getFullYear() + 1);
+
+        // If the date is more than a year in the future, don't color it
+        if (currentDate > yearInFuture) {
+            return null;
+        }
+
+        // Calculate which cycle number and day within cycle we're on
+        const daysSinceStart = Math.floor((currentDate - firstDay) / (1000 * 60 * 60 * 24));
+        const currentCycleNumber = Math.floor(daysSinceStart / cycleLength);
+        const dayInCycle = daysSinceStart % cycleLength;
+
+        // Calculate phase lengths
+        const follicularLength = Math.floor((cycleLength - periodLength - 14) / 2);
+        const ovulationLength = 1;
+        const lutealLength = cycleLength - periodLength - follicularLength - ovulationLength;
+
+        // Determine which phase we're in
+        if (dayInCycle < periodLength) {
+            return 'red'; // Menstruation phase
+        } else if (dayInCycle < periodLength + follicularLength) {
+            return 'green'; // Follicular phase
+        } else if (dayInCycle < periodLength + follicularLength + ovulationLength) {
+            return 'orange'; // Ovulation phase
+        } else if (dayInCycle < cycleLength) {
+            return 'purple'; // Luteal phase
+        }
+
+        return null;
+    }
+
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        locale: 'pl',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek'
+        },
+        selectable: true,
+        dayCellDidMount: function(arg) {
+            const date = arg.date;
+            const dateStr = date.toISOString().split('T')[0];
+
+            fetch('{% url "calendar" %}', {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            })
+            .then(response => response.json())
+            .then(events => {
+                // Find the most recent cycle data before this date
+                const relevantEvent = events.find(event => {
+                    if (!event.first_day_of_cycle) return false;
+                    const cycleStart = new Date(event.first_day_of_cycle);
+                    const yearLater = new Date(cycleStart);
+                    yearLater.setFullYear(yearLater.getFullYear() + 1);
+                    return date >= cycleStart && date <= yearLater;
+                });
+
+                if (relevantEvent) {
+                    const color = calculatePhasesForDay(dateStr, relevantEvent);
+                    if (color) {
+                        arg.el.style.backgroundColor = color;
                     }
                 }
-                document.getElementById('eventDetails').innerHTML = details || '<p>Brak szczegółów do wyświetlenia.</p>';
-                new bootstrap.Modal(document.getElementById('showEventModal')).show();
-            },
-            events: function(fetchInfo, successCallback, failureCallback) {
+            });
+        },
+        dateClick: function(info) {
+            const selectedDate = info.dateStr;
+            document.getElementById('addEventLink').href = `/cycle-health-form-view/?date=${selectedDate}`;
+            new bootstrap.Modal(document.getElementById('addEventModal')).show();
+        },
+        eventDidMount: function(info) {
+            info.el.style.cursor = 'pointer';
+        },
+        eventClick: function(info) {
+            currentEventId = info.event.id;
+            let details = '';
+            const fields = {
+                'Event': info.event.title,
+                'Date': info.event.start ? info.event.start.toLocaleDateString('pl-PL') : null,
+                'Cycle length': info.event.extendedProps.cycle_length,
+                'Period length': info.event.extendedProps.period_length,
+                'Last Period Start': info.event.extendedProps.last_period_start,
+                'Menstruation Phase Start': info.event.extendedProps.menstruation_phase_start,
+                'Menstruation Phase End': info.event.extendedProps.menstruation_phase_end,
+                'Average Pain Level': info.event.extendedProps.average_pain_level,
+                'Daily Mood': info.event.extendedProps.daily_mood,
+                'Daily Symptoms': info.event.extendedProps.daily_symptoms,
+                'Allergies': info.event.extendedProps.allergies,
+                'Medications': info.event.extendedProps.medications,
+                'Health Condition': info.event.extendedProps.health_condition
+            };
+
+            for (const [label, value] of Object.entries(fields)) {
+                if (value) {
+                    if (Array.isArray(value)) {
+                        details += `<p><strong>${label}:</strong> ${value.join(', ')}</p>`;
+                    } else {
+                        details += `<p><strong>${label}:</strong> ${value}</p>`;
+                    }
+                }
+            }
+
+            document.getElementById('eventDetails').innerHTML = details || '<p>Brak szczegółów do wyświetlenia.</p>';
+            new bootstrap.Modal(document.getElementById('showEventModal')).show();
+        },
+        events: function(fetchInfo, successCallback, failureCallback) {
+            fetch('{% url "calendar" %}', {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                successCallback(data.map(event => ({
+                    id: event.id,
+                    title: event.title,
+                    start: event.start,
+                    color: event.color,
+                    extendedProps: {
+                        cycle_length: event.cycle_length,
+                        period_length: event.period_length,
+                        last_period_start: event.last_period_start,
+                        menstruation_phase_start: event.menstruation_phase_start,
+                        menstruation_phase_end: event.menstruation_phase_end,
+                        average_pain_level: event.average_pain_level,
+                        daily_mood: event.daily_mood,
+                        daily_symptoms: event.daily_symptoms,
+                        allergies: event.allergies,
+                        medications: event.medications,
+                        health_condition: event.health_condition
+                    }
+                })));
+            })
+            .catch(error => failureCallback(error));
+        }
+    });
+
+    document.getElementById('deleteEventBtn').addEventListener('click', function() {
+        if (currentEventId) {
+            if (confirm('Czy na pewno chcesz usunąć to wydarzenie?')) {
+                const form = new FormData();
+                form.append('action', 'delete');
+                form.append('event_id', currentEventId);
+                form.append('csrfmiddlewaretoken', csrfToken);
+
                 fetch('{% url "calendar" %}', {
+                    method: 'POST',
+                    body: form,
                     headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-Requested-With': 'XMLHttpRequest'
                     }
                 })
                 .then(response => response.json())
                 .then(data => {
-                    const coloredEvents = data.map(event => ({
-                        ...event,
-                        color: event.first_day_of_cycle ? '#ff4d4d' :
-                               (event.menstruation_phase_start && event.menstruation_phase_end) ? '#ff8080' :
-                               '#4dabf7',
-                        display: 'block',
-                        className: 'calendar-event'
-                    }));
-                    successCallback(coloredEvents);
+                    if (data.message) {
+                        calendar.refetchEvents();
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('showEventModal'));
+                        modal.hide();
+                    } else {
+                        alert('Błąd podczas usuwania wydarzenia: ' + (data.error || 'Nieznany błąd'));
+                    }
                 })
-                .catch(error => failureCallback(error));
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Wystąpił błąd podczas usuwania wydarzenia');
+                });
             }
-        });
-
-        document.getElementById('deleteEventBtn').addEventListener('click', function() {
-            if (currentEventId) {
-                if (confirm('Czy na pewno chcesz usunąć to wydarzenie?')) {
-                    const form = new FormData();
-                    form.append('action', 'delete');
-                    form.append('event_id', currentEventId);
-                    form.append('csrfmiddlewaretoken', csrfToken);
-
-                    fetch('{% url "calendar" %}', {
-                        method: 'POST',
-                        body: form,
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest'
-                        }
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.message) {
-                            calendar.refetchEvents();
-                            const modal = bootstrap.Modal.getInstance(document.getElementById('showEventModal'));
-                            modal.hide();
-                        } else {
-                            alert('Błąd podczas usuwania wydarzenia: ' + (data.error || 'Nieznany błąd'));
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        alert('Wystąpił błąd podczas usuwania wydarzenia');
-                    });
-                }
-            }
-        });
-        calendar.render();
+        }
     });
+
+    calendar.render();
+});
 </script>
+
 {% endblock %}

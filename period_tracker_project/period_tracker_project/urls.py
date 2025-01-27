@@ -13,6 +13,7 @@ from period_app.views import (
     DietImpactView,
     SelfCareDuringMenstruationView,
     HealthDuringPregnancyView,
+    ExportStatisticsPDFView,
 )
 
 urlpatterns = [
@@ -23,6 +24,7 @@ urlpatterns = [
     path('', Home.as_view(), name='home'),
     path('calendar/', CalendarView.as_view(), name='calendar'),
     path('statistics/', StatisticsView.as_view(), name='statistics'),
+    path('statistics/export/pdf/', ExportStatisticsPDFView.as_view(), name='export_statistics_pdf'),
     path('knowledge-base/', KnowledgeBaseView.as_view(), name='knowledge_base'),
     path('cycle-health-form-view/', CycleHealthFormView.as_view(), name='form'),
     path('hormonalne-zdrowie/', HormonalHealthView.as_view(), name='hormonal_health'),
