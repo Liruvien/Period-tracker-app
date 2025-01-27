@@ -1,1 +1,1 @@
-default_app_config = 'period_app.PeriodAppConfig'
+default_app_config = 'period_app.apps.PeriodAppConfig'

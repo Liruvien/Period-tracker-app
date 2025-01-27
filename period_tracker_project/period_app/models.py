@@ -83,7 +83,7 @@ class HealthAndCycleFormModel(models.Model):
     luteal_phase_end = models.DateField(null=True, blank=True)
     allergies = models.TextField(null=True, blank=True)
     medications = models.TextField(null=True, blank=True)
-    health_conditions = models.TextField(null=True, blank=True)
+    health_condition = models.TextField(null=True, blank=True)
     pregnancy_start = models.DateField(null=True, blank=True)
     pregnancy_end = models.DateField(null=True, blank=True)
     current_cycle_day = models.PositiveIntegerField(null=True, blank=True)
@@ -103,7 +103,7 @@ class StatisticsCycleInfo(models.Model):
     """
     Model for tracking menstrual cycle statistics and health information.
     """
-    user_profile = models.OneToOneField(UserProfile, on_delete=models.CASCADE, null=False, blank=False)
+    user_profile = models.OneToOneField(UserProfile, on_delete=models.CASCADE, null=False, blank=False, related_name="cycle_info")
     first_day_of_cycle = models.DateField(null=True, blank=True)
     cycle_length = models.PositiveIntegerField(null=True, blank=True)
     period_length = models.PositiveIntegerField(null=True, blank=True)
@@ -114,7 +114,7 @@ class StatisticsCycleInfo(models.Model):
     menstruation_days = models.JSONField(default=list)
     allergies = models.TextField(null=True, blank=True)
     medications = models.TextField(null=True, blank=True)
-    health_conditions = models.TextField(null=True, blank=True)
+    health_condition = models.TextField(null=True, blank=True)
     daily_symptoms = models.CharField(max_length=255, choices=HealthAndCycleFormModel.SYMPTOM_CHOICES, blank=True)
     daily_mood = models.CharField(max_length=255, choices=HealthAndCycleFormModel.MOOD_CHOICES, blank=True)
     current_cycle_day = models.PositiveIntegerField(null=True, blank=True)

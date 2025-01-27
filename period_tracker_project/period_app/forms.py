@@ -64,12 +64,12 @@ class HealthAndCycleForm(forms.ModelForm):
             'first_day_of_cycle', 'cycle_length', 'period_length',
             'last_period_start', 'average_pain_level',
             'menstruation_phase_start', 'menstruation_phase_end',
-            'allergies', 'medications', 'health_conditions',
+            'allergies', 'medications', 'health_condition',
             'daily_symptoms', 'daily_mood', 'date', 'event'
         ]
         widgets = {
-            'user_profile': forms.HiddenInput()
-        }
+            'user_profile': forms.HiddenInput(),
+            }
 
     date = forms.DateField(
         label="Data wydarzenia",
@@ -84,7 +84,7 @@ class HealthAndCycleForm(forms.ModelForm):
     )
 
     first_day_of_cycle = forms.DateField(
-        label="Data wydarzenia",
+        label="Pierwszy dzien cyklu",
         required=True,
         widget=forms.DateInput(attrs={'type': 'date'})
     )
@@ -171,14 +171,14 @@ class HealthAndCycleForm(forms.ModelForm):
         label="Nastrój",
         required=False,
         widget=forms.CheckboxSelectMultiple,
-        choices=MOOD_CHOICES,
+        choices=HealthAndCycleFormModel.MOOD_CHOICES,
     )
 
     daily_symptoms = forms.MultipleChoiceField(
-        label="Objawy",
-        required=False,
-        widget=forms.CheckboxSelectMultiple,
-        choices=SYMPTOM_CHOICES,
+         label="Objawy",
+         required=False,
+         widget=forms.CheckboxSelectMultiple,
+         choices=HealthAndCycleFormModel.SYMPTOM_CHOICES,
     )
 
     allergies = forms.CharField(
@@ -191,7 +191,7 @@ class HealthAndCycleForm(forms.ModelForm):
         required=False,
         widget=forms.Textarea(attrs={'placeholder': 'Wpisz przyjmowane leki', 'rows': 3})
     )
-    health_conditions = forms.CharField(
+    health_condition = forms.CharField(
         label="Stan zdrowia",
         required=False,
         widget=forms.Textarea(attrs={'placeholder': 'Opisz stan zdrowia', 'rows': 3})

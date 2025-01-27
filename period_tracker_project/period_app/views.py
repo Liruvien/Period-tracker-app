@@ -12,7 +12,7 @@ from django.utils import timezone
 from django.contrib import messages
 from .forms import UserLoginForm, HealthAndCycleForm, CustomUserCreationForm
 from .models import HealthAndCycleFormModel, StatisticsCycleInfo, UserProfile
-
+from datetime import timedelta
 
 class RegisterView(CreateView):
     """
@@ -89,17 +89,13 @@ class CalendarView(LoginRequiredMixin, TemplateView):
 
     def post(self, request, *args, **kwargs):
         """
-        Handles POST requests for editing or deleting calendar events.
+        Handles POST requests for deleting calendar events and redirect to form .
         """
         action = request.POST.get('action')
         try:
-            if action == 'edit':
-                return self.edit_event(request)
-            elif action == 'delete':
+            if action == 'delete':
                 return self.delete_event(request)
-
             return HttpResponseBadRequest("Incorrect action")
-
         except PermissionDenied as e:
             return JsonResponse({"error": str(e)}, status=403)
         except ValidationError as e:
@@ -128,28 +124,11 @@ class CalendarView(LoginRequiredMixin, TemplateView):
                 "daily_symptoms": event.daily_symptoms,
                 "allergies": event.allergies,
                 "medications": event.medications,
-                "health_conditions": event.health_conditions,
+                "health_condition": event.health_condition,
             }
             for event in events
         ]
         return JsonResponse(events_data, safe=False)
-
-    @staticmethod
-    def edit_event(request):
-        """
-        Edits an existing event.
-        :return: JSON response indicating success or error.
-        """
-        event_id = request.POST.get('event_id')
-        event = HealthAndCycleFormModel.objects.get(
-            id=event_id,
-            user_profile=request.user.userprofile
-        )
-        form = HealthAndCycleForm(request.POST, instance=event)
-        if form.is_valid():
-            form.save()
-            return JsonResponse({"message": "Event updated"})
-        return JsonResponse({"error": form.errors}, status=400)
 
     @staticmethod
     def delete_event(request):
@@ -158,12 +137,15 @@ class CalendarView(LoginRequiredMixin, TemplateView):
         :return: JSON response indicating the result of the operation.
         """
         event_id = request.POST.get('event_id')
-        event = HealthAndCycleFormModel.objects.get(
-            id=event_id,
-            user_profile=request.user.userprofile
-        )
-        event.delete()
-        return JsonResponse({"message": "Event deteted"})
+        try:
+            event = HealthAndCycleFormModel.objects.get(
+                id=event_id,
+                user_profile=request.user.userprofile
+            )
+            event.delete()
+            return JsonResponse({"message": "Event deleted"})
+        except HealthAndCycleFormModel.DoesNotExist:
+            return JsonResponse({"error": "Event not found"}, status=404)
 
 
 class CycleHealthFormView(LoginRequiredMixin, View):
@@ -177,7 +159,7 @@ class CycleHealthFormView(LoginRequiredMixin, View):
         """
         Handles GET requests to render the health and cycle form.
         """
-        selected_date = timezone.now().date()  # Używamy bieżącej daty
+        selected_date = timezone.now().date()
         form = HealthAndCycleForm(initial={'date': selected_date})
         return render(request, self.template_name, {'form': form})
 
@@ -185,14 +167,14 @@ class CycleHealthFormView(LoginRequiredMixin, View):
         """
         Handles POST requests to save the form data.
         """
-        form = HealthAndCycleForm(request.POST)  # Tworzymy formularz bez instancji modelu
+        form = HealthAndCycleForm(request.POST)
         if form.is_valid():
             try:
                 form.instance.user_profile = request.user.userprofile
                 form.instance.recorded_at = timezone.now()
                 form.save()
                 messages.success(request, "Form saved.")
-                return redirect('calendar')  # Zwykłe przekierowanie na stronę kalendarza
+                return redirect('calendar')
             except Exception as e:
                 messages.error(request, f"Error: {str(e)}")
         else:
@@ -200,23 +182,16 @@ class CycleHealthFormView(LoginRequiredMixin, View):
 
         return render(request, self.template_name, {'form': form})
 
-
 class StatisticsView(LoginRequiredMixin, TemplateView):
-    """
-    View for displaying statistics related to the user's cycle.
-    """
     redirect_field_name = 'next'
     template_name = 'statistics.html'
+    model = StatisticsCycleInfo
 
     def get_context_data(self, **kwargs):
-        """
-        Adds cycle statistics and related data to the context.
-        """
         context = super().get_context_data(**kwargs)
-        user_profile = self.request.user.StatisticsCycleInfo.userprofile
-
         try:
-            statistics = StatisticsCycleInfo.objects.get(user_profile=user_profile)
+            user_profile = self.request.user.userprofile
+            statistics = user_profile.cycle_info
             context.update({
                 'statistics': statistics,
                 'has_data': True,
@@ -252,9 +227,13 @@ class StatisticsView(LoginRequiredMixin, TemplateView):
                     'recorded_at': statistics.recorded_at,
                 }
             })
+        except UserProfile.DoesNotExist:
+            context['has_data'] = False
         except StatisticsCycleInfo.DoesNotExist:
             context['has_data'] = False
-
+        except Exception as e:
+            context['has_data'] = False
+            context['error_message'] = f"Wystąpił błąd: {str(e)}"
         return context
 
 
