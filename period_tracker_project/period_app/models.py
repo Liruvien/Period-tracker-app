@@ -30,42 +30,42 @@ class HealthAndCycleFormModel(models.Model):
     """
     PAIN_LEVEL_CHOICES = [(i, str(i)) for i in range(1, 11)]
     SYMPTOM_CHOICES = [
-        ('1', 'Ból brzucha'),
-        ('2', 'Ból pleców'),
-        ('3', 'Ból nóg'),
-        ('4', 'Ból w klatce piersiowej'),
-        ('5', 'Ból głowy'),
-        ('6', 'Ból ramion'),
-        ('7', 'Kłucie w pochwie'),
-        ('8', 'Podwyższona temperatura ciała'),
-        ('9', 'Obniżona temperatura ciała'),
-        ('10', 'Biegunka'),
-        ('11', 'Zaparcia'),
-        ('12', 'Zgaga'),
-        ('13', 'Obrzęk'),
-        ('14', 'Trądzik'),
-        ('15', 'Dusznosci'),
-        ('16', 'Wahania nastroju'),
-        ('17', 'Wzdęcia'),
-        ('18', 'Krwawienie zastepcze'),
-        ('19', 'Zmęczenie'),
+        ('Ból brzucha', 'Ból brzucha'),
+        ('Ból pleców', 'Ból pleców'),
+        ('Ból nóg', 'Ból nóg'),
+        ('Ból w klatce piersiowej', 'Ból w klatce piersiowej'),
+        ('Ból głowy', 'Ból głowy'),
+        ('Ból ramion', 'Ból ramion'),
+        ('Kłucie w pochwie', 'Kłucie w pochwie'),
+        ('Podwyższona temperatura ciała', 'Podwyższona temperatura ciała'),
+        ('Obniżona temperatura ciała', 'Obniżona temperatura ciała'),
+        ('Biegunka', 'Biegunka'),
+        ('Zaparcia', 'Zaparcia'),
+        ('Zgaga', 'Zgaga'),
+        ('Obrzęk', 'Obrzęk'),
+        ('Trądzik', 'Trądzik'),
+        ('Dusznosci', 'Dusznosci'),
+        ('Wahania nastroju', 'Wahania nastroju'),
+        ('Wzdęcia', 'Wzdęcia'),
+        ('Krwawienie zastepcze', 'Krwawienie zastepcze'),
+        ('Zmęczenie', 'Zmęczenie'),
     ]
     MOOD_CHOICES = [
-        ('1', 'Szczęście'),
-        ('2', 'Entuzjazm'),
-        ('3', 'Ekscytacja'),
-        ('4', 'Smutek'),
-        ('5', 'Rozpacz'),
-        ('6', 'Lęk'),
-        ('7', 'Irytacja'),
-        ('8', 'Gniew'),
-        ('9', 'Radość'),
-        ('10', 'Placz'),
-        ('11', 'Strach'),
-        ('12', 'Złość'),
-        ('13', 'Wstręt'),
-        ('14', 'Rozpacz'),
-        ('15', 'Panika'),
+        ('Szczęście', 'Szczęście'),
+        ('Entuzjazm', 'Entuzjazm'),
+        ('Ekscytacja', 'Ekscytacja'),
+        ('Smutek', 'Smutek'),
+        ('Rozpacz', 'Rozpacz'),
+        ('Lęk', 'Lęk'),
+        ('Irytacja', 'Irytacja'),
+        ('Gniew', 'Gniew'),
+        ('Radość', 'Radość'),
+        ('Placz', 'Placz'),
+        ('Strach', 'Strach'),
+        ('Złość', 'Złość'),
+        ('Wstręt', 'Wstręt'),
+        ('Rozpacz', 'Rozpacz'),
+        ('Panika', 'Panika'),
     ]
     user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, null=False, blank=False)
     first_day_of_cycle = models.DateField(null=True, blank=True)
@@ -90,13 +90,12 @@ class HealthAndCycleFormModel(models.Model):
     menstruation_days = models.JSONField(default=list)
     date = models.DateField(null=True, blank=True)
     event = models.TextField(null=True, blank=True)
-    daily_symptoms = models.CharField(max_length=255, choices=SYMPTOM_CHOICES, blank=True)
-    daily_mood = models.CharField(max_length=255, choices=MOOD_CHOICES, blank=True)
+    daily_symptoms = models.JSONField(default=list)
+    daily_mood = models.JSONField(default=list)
     recorded_at = models.DateTimeField(null=True, blank=True, verbose_name="Recorded At")
 
     def __str__(self):
         return f"{self.user_profile.user.username}'s form - {self.recorded_at.date()}"
-
 
 
 class StatisticsCycleInfo(models.Model):

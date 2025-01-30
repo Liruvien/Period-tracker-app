@@ -3,15 +3,7 @@
 {% load static %}
 {% block content %}
 <div class="container mt-4">
-    <div class="row mb-3">
-        <div class="col">
-            <a href="{% url 'home' %}" class="btn btn-primary">Strona główna</a>
-            <a href="{% url 'knowledge_base' %}" class="btn btn-info">Baza wiedzy</a>
-            <a href="{% url 'form' %}" class="btn btn-success">Formularz zdrowia cyklu</a>
-            <a href="{% url 'statistics' %}" class="btn btn-warning">Statystyki</a>
-        </div>
 
-    </div>
     <div class="row mb-3">
         <div class="col">
             <div class="card">
@@ -84,46 +76,62 @@ document.addEventListener('DOMContentLoaded', function() {
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
     let currentEventId = null;
 
-    function calculatePhasesForDay(date, cycleData) {
-        if (!cycleData.first_day_of_cycle || !cycleData.cycle_length || !cycleData.period_length) {
-            return null;
-        }
-
-        const currentDate = new Date(date);
-        const firstDay = new Date(cycleData.first_day_of_cycle);
-        const cycleLength = parseInt(cycleData.cycle_length);
-        const periodLength = parseInt(cycleData.period_length);
-        const yearInFuture = new Date(firstDay);
-        yearInFuture.setFullYear(yearInFuture.getFullYear() + 1);
-
-        // If the date is more than a year in the future, don't color it
-        if (currentDate > yearInFuture) {
-            return null;
-        }
-
-        // Calculate which cycle number and day within cycle we're on
-        const daysSinceStart = Math.floor((currentDate - firstDay) / (1000 * 60 * 60 * 24));
-        const currentCycleNumber = Math.floor(daysSinceStart / cycleLength);
-        const dayInCycle = daysSinceStart % cycleLength;
-
-        // Calculate phase lengths
-        const follicularLength = Math.floor((cycleLength - periodLength - 14) / 2);
-        const ovulationLength = 1;
-        const lutealLength = cycleLength - periodLength - follicularLength - ovulationLength;
-
-        // Determine which phase we're in
-        if (dayInCycle < periodLength) {
-            return 'red'; // Menstruation phase
-        } else if (dayInCycle < periodLength + follicularLength) {
-            return 'green'; // Follicular phase
-        } else if (dayInCycle < periodLength + follicularLength + ovulationLength) {
-            return 'orange'; // Ovulation phase
-        } else if (dayInCycle < cycleLength) {
-            return 'purple'; // Luteal phase
-        }
-
+function calculatePhasesForDay(date, cycleData) {
+    if (!cycleData.menstruation_phase_start || !cycleData.menstruation_phase_end || !cycleData.cycle_length) {
         return null;
     }
+
+    const currentDate = new Date(date);
+    currentDate.setHours(0, 0, 0, 0);
+
+    const menstruationStart = new Date(cycleData.menstruation_phase_start);
+    menstruationStart.setHours(0, 0, 0, 0);
+
+    const menstruationEnd = new Date(cycleData.menstruation_phase_end);
+    menstruationEnd.setHours(0, 0, 0, 0);
+
+    const cycleLength = parseInt(cycleData.cycle_length);
+
+    const daysSinceStart = Math.floor((currentDate - menstruationStart) / (1000 * 60 * 60 * 24));
+    const currentCycleNumber = Math.floor(daysSinceStart / cycleLength);
+
+    const currentCycleStart = new Date(menstruationStart);
+    currentCycleStart.setDate(menstruationStart.getDate() + (currentCycleNumber * cycleLength));
+
+    const currentCycleMenstruationEnd = new Date(currentCycleStart);
+    const menstruationDuration = Math.floor((menstruationEnd - menstruationStart) / (1000 * 60 * 60 * 24)) + 1;
+    currentCycleMenstruationEnd.setDate(currentCycleStart.getDate() + menstruationDuration - 1);
+
+    const remainingDays = cycleLength - menstruationDuration;
+    const follicularDays = Math.floor((remainingDays - 1) / 2);
+
+    const currentCycleFollicularStart = new Date(currentCycleMenstruationEnd);
+    currentCycleFollicularStart.setDate(currentCycleMenstruationEnd.getDate() + 1);
+
+    const currentCycleFollicularEnd = new Date(currentCycleFollicularStart);
+    currentCycleFollicularEnd.setDate(currentCycleFollicularStart.getDate() + follicularDays - 1);
+
+    const currentCycleOvulationStart = new Date(currentCycleFollicularEnd);
+    currentCycleOvulationStart.setDate(currentCycleFollicularEnd.getDate() + 1);
+
+    const currentCycleLutealStart = new Date(currentCycleOvulationStart);
+    currentCycleLutealStart.setDate(currentCycleOvulationStart.getDate() + 1);
+
+    const currentCycleEnd = new Date(currentCycleStart);
+    currentCycleEnd.setDate(currentCycleStart.getDate() + cycleLength - 1);
+
+    if (currentDate >= currentCycleStart && currentDate <= currentCycleMenstruationEnd) {
+        return 'red';
+    } else if (currentDate >= currentCycleFollicularStart && currentDate <= currentCycleFollicularEnd) {
+        return 'green';
+    } else if (currentDate.getTime() === currentCycleOvulationStart.getTime()) {
+        return 'orange';
+    } else if (currentDate >= currentCycleLutealStart && currentDate <= currentCycleEnd) {
+        return 'purple';
+    }
+
+    return null;
+}
 
     const calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
@@ -145,7 +153,6 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(response => response.json())
             .then(events => {
-                // Find the most recent cycle data before this date
                 const relevantEvent = events.find(event => {
                     if (!event.first_day_of_cycle) return false;
                     const cycleStart = new Date(event.first_day_of_cycle);
@@ -270,5 +277,4 @@ document.addEventListener('DOMContentLoaded', function() {
     calendar.render();
 });
 </script>
-
 {% endblock %}

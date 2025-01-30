@@ -58,6 +58,7 @@ class HealthAndCycleForm(forms.ModelForm):
     Form for tracking health and menstrual cycle details.
     """
     PAIN_LEVEL_CHOICES = [(i, str(i)) for i in range(1, 11)]
+
     class Meta:
         model = HealthAndCycleFormModel
         fields = [
@@ -69,7 +70,7 @@ class HealthAndCycleForm(forms.ModelForm):
         ]
         widgets = {
             'user_profile': forms.HiddenInput(),
-            }
+        }
 
     date = forms.DateField(
         label="Data wydarzenia",
@@ -120,65 +121,65 @@ class HealthAndCycleForm(forms.ModelForm):
         min_value=1,
         widget=forms.NumberInput(attrs={'placeholder': 'Wprowadź długość cyklu'})
     )
+
     average_pain_level = forms.ChoiceField(
         label="Średni poziom bólu (1-10)",
         required=False,
-        widget=forms.NumberInput(attrs={'placeholder': 'Wprowadź średni poziom bólu'}),
         choices=PAIN_LEVEL_CHOICES,
     )
 
     SYMPTOM_CHOICES = [
-        ('1', 'Ból brzucha'),
-        ('2', 'Ból pleców'),
-        ('3', 'Ból nóg'),
-        ('4', 'Ból w klatce piersiowej'),
-        ('5', 'Ból głowy'),
-        ('6', 'Ból ramion'),
-        ('7', 'Kłucie w pochwie'),
-        ('8', 'Podwyższona temperatura ciała'),
-        ('9', 'Obniżona temperatura ciała'),
-        ('10', 'Biegunka'),
-        ('11', 'Zaparcia'),
-        ('12', 'Zgaga'),
-        ('13', 'Obrzęk'),
-        ('14', 'Trądzik'),
-        ('15', 'Dusznosci'),
-        ('16', 'Wahania nastroju'),
-        ('17', 'Wzdęcia'),
-        ('18', 'Krwawienie zastepcze'),
-        ('19', 'Zmęczenie'),
+        ('Ból brzucha', 'Ból brzucha'),
+        ('Ból pleców', 'Ból pleców'),
+        ('Ból nóg', 'Ból nóg'),
+        ('Ból w klatce piersiowej', 'Ból w klatce piersiowej'),
+        ('Ból głowy', 'Ból głowy'),
+        ('Ból ramion', 'Ból ramion'),
+        ('Kłucie w pochwie', 'Kłucie w pochwie'),
+        ('Podwyższona temperatura ciała', 'Podwyższona temperatura ciała'),
+        ('Obniżona temperatura ciała', 'Obniżona temperatura ciała'),
+        ('Biegunka', 'Biegunka'),
+        ('Zaparcia', 'Zaparcia'),
+        ('Zgaga', 'Zgaga'),
+        ('Obrzęk', 'Obrzęk'),
+        ('Trądzik', 'Trądzik'),
+        ('Dusznosci', 'Dusznosci'),
+        ('Wahania nastroju', 'Wahania nastroju'),
+        ('Wzdęcia', 'Wzdęcia'),
+        ('Krwawienie zastepcze', 'Krwawienie zastepcze'),
+        ('Zmęczenie', 'Zmęczenie'),
     ]
 
     MOOD_CHOICES = [
-        ('1', 'Szczęście'),
-        ('2', 'Entuzjazm'),
-        ('3', 'Ekscytacja'),
-        ('4', 'Smutek'),
-        ('5', 'Rozpacz'),
-        ('6', 'Lęk'),
-        ('7', 'Irytacja'),
-        ('8', 'Gniew'),
-        ('9', 'Radość'),
-        ('10', 'Placz'),
-        ('11', 'Strach'),
-        ('12', 'Złość'),
-        ('13', 'Wstręt'),
-        ('14', 'Rozpacz'),
-        ('15', 'Panika'),
+        ('Szczęście', 'Szczęście'),
+        ('Entuzjazm', 'Entuzjazm'),
+        ('Ekscytacja', 'Ekscytacja'),
+        ('Smutek', 'Smutek'),
+        ('Rozpacz', 'Rozpacz'),
+        ('Lęk', 'Lęk'),
+        ('Irytacja', 'Irytacja'),
+        ('Gniew', 'Gniew'),
+        ('Radość', 'Radość'),
+        ('Placz', 'Placz'),
+        ('Strach', 'Strach'),
+        ('Złość', 'Złość'),
+        ('Wstręt', 'Wstręt'),
+        ('Rozpacz', 'Rozpacz'),
+        ('Panika', 'Panika'),
     ]
 
     daily_mood = forms.MultipleChoiceField(
         label="Nastrój",
         required=False,
         widget=forms.CheckboxSelectMultiple,
-        choices=HealthAndCycleFormModel.MOOD_CHOICES,
+        choices=MOOD_CHOICES,
     )
 
     daily_symptoms = forms.MultipleChoiceField(
-         label="Objawy",
-         required=False,
-         widget=forms.CheckboxSelectMultiple,
-         choices=HealthAndCycleFormModel.SYMPTOM_CHOICES,
+        label="Objawy",
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        choices=SYMPTOM_CHOICES,
     )
 
     allergies = forms.CharField(
@@ -186,11 +187,13 @@ class HealthAndCycleForm(forms.ModelForm):
         required=False,
         widget=forms.Textarea(attrs={'placeholder': 'Wpisz alergie', 'rows': 3})
     )
+
     medications = forms.CharField(
         label="Leki",
         required=False,
         widget=forms.Textarea(attrs={'placeholder': 'Wpisz przyjmowane leki', 'rows': 3})
     )
+
     health_condition = forms.CharField(
         label="Stan zdrowia",
         required=False,
@@ -198,14 +201,18 @@ class HealthAndCycleForm(forms.ModelForm):
     )
 
     def __init__(self, *args, **kwargs):
-        """
-        Initialize form with default date.
-        Args:
-            *args: Positional arguments
-            **kwargs: Keyword arguments
-        """
         initial_date = kwargs.get('initial', {}).get('date', timezone.now().date())
         if 'initial' not in kwargs:
             kwargs['initial'] = {}
         kwargs['initial']['date'] = initial_date
         super().__init__(*args, **kwargs)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        daily_symptoms = cleaned_data.get('daily_symptoms', [])
+        daily_mood = cleaned_data.get('daily_mood', [])
+        if daily_symptoms:
+            cleaned_data['daily_symptoms'] = list(daily_symptoms)
+        if daily_mood:
+            cleaned_data['daily_mood'] = list(daily_mood)
+        return cleaned_data

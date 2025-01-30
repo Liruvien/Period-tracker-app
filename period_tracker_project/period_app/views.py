@@ -6,7 +6,7 @@ from django.urls import reverse_lazy
 from django.contrib.auth import login, authenticate
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import render, redirect
-from django.http import JsonResponse, HttpResponseBadRequest
+from django.http import JsonResponse, HttpResponseBadRequest, HttpResponse
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
 from django.contrib import messages
@@ -16,12 +16,19 @@ from .utils import calculate_cycle_phases
 from django.utils.timezone import now
 from django.db.models import Avg, Count
 import calendar
-from datetime import timedelta
+from datetime import datetime, timedelta
 from django.db.models.functions import ExtractMonth
-from django.http import HttpResponse
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from io import BytesIO
+from typing import Dict
+from collections import defaultdict
+from typing import TYPE_CHECKING
+from typing import Any
+
+
+if TYPE_CHECKING:
+    from .models import UserProfile
 
 class RegisterView(CreateView):
     """
@@ -55,11 +62,9 @@ class LoginView(FormView):
         username = form.cleaned_data['username']
         password = form.cleaned_data['password']
         user = authenticate(username=username, password=password)
-
-        if user is not None:
+        if user:
             login(self.request, user)
             return super().form_valid(form)
-
         form.add_error(None, 'Invalid credentials')
         return self.form_invalid(form)
 
@@ -70,15 +75,153 @@ class CustomLogoutView(LogoutView):
     """
     next_page = reverse_lazy('login')
 
+
 class Home(LoginRequiredMixin, View):
     """
-    Home view for logged-in users. Displays the home page.
+    Home view for logged-in users. Displays current cycle information.
     """
     redirect_field_name = 'next'
     template_name = 'home.html'
 
     def get(self, request):
-        return render(request, self.template_name)
+        """Handle GET request and display cycle information."""
+        try:
+            user_profile = request.user.userprofile
+            cycle_info = self.get_current_cycle_info(user_profile)
+        except AttributeError:
+            return render(request, self.template_name, {'error': 'User profile not found'})
+
+        if not cycle_info:
+            return render(request, self.template_name, {'error': 'Brak danych o cyklu'})
+
+        current_phase = self.get_phase_for_day(cycle_info['cycle_day'], cycle_info['cycle_length'])
+        hormone_levels = self.get_hormone_levels(current_phase)
+        phase_info = self.get_phase_description(current_phase)
+        next_period = self.predict_next_period(cycle_info)
+
+        context = {
+            'cycle_info': cycle_info,
+            'current_phase': current_phase,
+            'hormone_levels': hormone_levels,
+            'phase_info': phase_info,
+            'next_period': next_period
+        }
+
+        return render(request, self.template_name, context)
+
+    def get_current_cycle_info(self, user_profile) -> Dict[str, Any] | None:
+        latest_entry = (HealthAndCycleFormModel.objects
+                        .filter(user_profile=user_profile)
+                        .order_by('-menstruation_phase_start')
+                        .first())
+
+        if not latest_entry or not latest_entry.menstruation_phase_start:
+            return None
+
+        today = datetime.now().date()
+        start_date = latest_entry.menstruation_phase_start
+        days_since_start = (today - start_date).days
+        current_cycle_day = (days_since_start % (latest_entry.cycle_length or 28)) + 1
+
+        return {
+            'cycle_day': current_cycle_day,
+            'cycle_length': latest_entry.cycle_length,
+            'first_day': latest_entry.first_day_of_cycle,
+            'period_length': latest_entry.period_length
+        }
+
+    def get_phase_for_day(self, cycle_day: int, cycle_length: int) -> str:
+        """Determine cycle phase for given day."""
+        phase_lengths = {
+            'menstruation': 6,
+            'follicular': 9,
+            'ovulation': 1,
+            'luteal': cycle_length - 19
+        }
+
+        if cycle_day <= phase_lengths['menstruation']:
+            return 'menstruation'
+        elif cycle_day <= phase_lengths['menstruation'] + phase_lengths['follicular']:
+            return 'follicular'
+        elif cycle_day <= phase_lengths['menstruation'] + phase_lengths['follicular'] + phase_lengths['ovulation']:
+            return 'ovulation'
+        return 'luteal'
+
+    def get_hormone_levels(self, phase: str) -> Dict[str, float]:
+        """Return approximate hormone levels for given phase."""
+        hormone_levels = {
+            'menstruation': {
+                'estrogen': 20.0,
+                'progesterone': 10.0,
+                'fsh': 40.0,
+                'lh': 20.0
+            },
+            'follicular': {
+                'estrogen': 60.0,
+                'progesterone': 20.0,
+                'fsh': 70.0,
+                'lh': 30.0
+            },
+            'ovulation': {
+                'estrogen': 90.0,
+                'progesterone': 30.0,
+                'fsh': 90.0,
+                'lh': 100.0
+            },
+            'luteal': {
+                'estrogen': 40.0,
+                'progesterone': 90.0,
+                'fsh': 20.0,
+                'lh': 20.0
+            }
+        }
+        return hormone_levels.get(phase, {})
+
+    def get_phase_description(self, phase: str) -> Dict[str, str]:
+        """Zwraca opis i zalecenia dla danej fazy cyklu"""
+        descriptions = {
+            'menstruation': {
+                'description': 'Rozpoczyna się nowy cykl. Poziom hormonów jest niski.',
+                'symptoms': 'Możliwe bóle brzucha, zmęczenie, wahania nastroju.',
+                'recommendations': 'Zadbaj o odpoczynek, unikaj nadmiernego wysiłku, zwróć uwagę na higienę.',
+                'exercise': 'Lekkie ćwiczenia, spacery, stretching.',
+                'nutrition': 'Zwiększ spożycie żelaza i witaminy B12, pij dużo wody.'
+            },
+            'follicular': {
+                'description': 'Poziom estrogenów wzrasta, przygotowując organizm do owulacji.',
+                'symptoms': 'Wzrost energii, poprawa nastroju, większa kreatywność.',
+                'recommendations': 'To dobry czas na nowe projekty i aktywność fizyczną.',
+                'exercise': 'Możesz zwiększyć intensywność treningu.',
+                'nutrition': 'Zrównoważona dieta bogata w proteiny i warzywa.'
+            },
+            'ovulation': {
+                'description': 'Szczyt płodności. Wysoki poziom estrogenów i LH.',
+                'symptoms': 'Możliwy ból owulacyjny, zwiększone libido.',
+                'recommendations': 'Obserwuj objawy owulacji jeśli planujesz ciążę.',
+                'exercise': 'Możesz kontynuować regularne treningi.',
+                'nutrition': 'Zwiększ spożycie antyoksydantów i kwasów omega-3.'
+            },
+            'luteal': {
+                'description': 'Wzrost poziomu progesteronu. Organizm przygotowuje się do następnego cyklu.',
+                'symptoms': 'Możliwe PMS, wahania nastroju, zatrzymanie wody.',
+                'recommendations': 'Zadbaj o regularny sen i techniki relaksacyjne.',
+                'exercise': 'Umiarkowana aktywność fizyczna, joga.',
+                'nutrition': 'Ogranicz sól i cukry proste, zwiększ spożycie magnezu.'
+            }
+        }
+        return descriptions.get(phase, {})
+
+    def predict_next_period(self, cycle_info: Dict) -> datetime.date:
+        if not cycle_info or not cycle_info.get('first_day'):
+            return None
+
+        first_day = cycle_info['first_day']
+        cycle_length = cycle_info['cycle_length']
+        days_since_start = (datetime.now().date() - first_day).days
+        completed_cycles = days_since_start // cycle_length
+        next_period = first_day + timedelta(days=(completed_cycles + 1) * cycle_length)
+
+        return next_period
 
 
 class CalendarView(LoginRequiredMixin, TemplateView):
@@ -118,12 +261,16 @@ class CalendarView(LoginRequiredMixin, TemplateView):
         for event in events:
             phases = calculate_cycle_phases(event.menstruation_phase_start, event.menstruation_phase_end,
                                             event.cycle_length)
-            event_date = event.date
+            event_date = datetime.combine(event.date, datetime.min.time())
             event_color = None
+            menstruation_start = datetime.combine(event.menstruation_phase_start,
+                                                  datetime.min.time()) if event.menstruation_phase_start else None
+            menstruation_end = datetime.combine(event.menstruation_phase_end,
+                                                datetime.min.time()) if event.menstruation_phase_end else None
 
             for phase_set in phases:
                 for phase_name, phase_info in phase_set.items():
-                    if phase_info['start'] <= event_date <= phase_info['end']:
+                    if phase_info['start'] <= event_date.date() <= phase_info['end']:
                         event_color = phase_info['color']
                         break
 
@@ -199,9 +346,6 @@ class CycleHealthFormView(LoginRequiredMixin, View):
                 return redirect('calendar')
             except Exception as e:
                 messages.error(request, f"Error: {str(e)}")
-        else:
-            messages.error(request, "KO in form.")
-
         return render(request, self.template_name, {'form': form})
 
 
@@ -210,8 +354,7 @@ class StatisticsView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        user_profile = self.request.user.userprofile
-
+        user_profile = UserProfile.objects.get(user=self.request.user)
         today = now().date()
         one_year_ago = today - timedelta(days=365)
 
@@ -234,9 +377,9 @@ class StatisticsView(LoginRequiredMixin, TemplateView):
                 user_profile=user_profile,
                 recorded_at__date__gte=one_year_ago
             )
+            .exclude(daily_symptoms=[])
             .annotate(month=ExtractMonth('recorded_at'))
             .values('month', 'daily_symptoms')
-            .annotate(symptom_count=Count('id'))
         )
 
         moods_data = (
@@ -244,9 +387,9 @@ class StatisticsView(LoginRequiredMixin, TemplateView):
                 user_profile=user_profile,
                 recorded_at__date__gte=one_year_ago
             )
+            .exclude(daily_mood=[])
             .annotate(month=ExtractMonth('recorded_at'))
             .values('month', 'daily_mood')
-            .annotate(mood_count=Count('id'))
         )
 
         months = [calendar.month_name[i] for i in range(1, 13)]
@@ -261,28 +404,38 @@ class StatisticsView(LoginRequiredMixin, TemplateView):
             pain_levels[month_idx] = round(data['average_pain_level'], 2) if data['average_pain_level'] else 0
             event_counts[month_idx] = data['event_count']
 
+        symptom_counts = defaultdict(lambda: defaultdict(int))
         for data in symptoms_data:
             month_idx = data['month'] - 1
-            symptom_count = data['symptom_count']
-            if symptom_count > monthly_symptoms[month_idx]['count']:
-                symptom_name = dict(HealthAndCycleFormModel.SYMPTOM_CHOICES).get(
-                    data['daily_symptoms'], 'Unknown'
+            for symptom in data['daily_symptoms']:
+                symptom_counts[month_idx][symptom] += 1
+
+        for month_idx in range(12):
+            if symptom_counts[month_idx]:
+                most_common_symptom = max(
+                    symptom_counts[month_idx].items(),
+                    key=lambda x: x[1]
                 )
                 monthly_symptoms[month_idx] = {
-                    'symptom': symptom_name,
-                    'count': symptom_count
+                    'symptom': most_common_symptom[0],
+                    'count': most_common_symptom[1]
                 }
 
+        mood_counts = defaultdict(lambda: defaultdict(int))
         for data in moods_data:
             month_idx = data['month'] - 1
-            mood_count = data['mood_count']
-            if mood_count > monthly_moods[month_idx]['count']:
-                mood_name = dict(HealthAndCycleFormModel.MOOD_CHOICES).get(
-                    data['daily_mood'], 'Unknown'
+            for mood in data['daily_mood']:
+                mood_counts[month_idx][mood] += 1
+
+        for month_idx in range(12):
+            if mood_counts[month_idx]:
+                most_common_mood = max(
+                    mood_counts[month_idx].items(),
+                    key=lambda x: x[1]
                 )
                 monthly_moods[month_idx] = {
-                    'mood': mood_name,
-                    'count': mood_count
+                    'mood': most_common_mood[0],
+                    'count': most_common_mood[1]
                 }
 
         context['chart_data'] = {
@@ -302,8 +455,6 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
         user_profile = request.user.userprofile
         today = now().date()
         one_year_ago = today - timedelta(days=365)
-
-        # Get numeric data
         monthly_data = (
             HealthAndCycleFormModel.objects.filter(
                 user_profile=user_profile,
@@ -317,8 +468,6 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
             )
             .order_by('month')
         )
-
-        # Get symptoms data
         symptoms_data = (
             HealthAndCycleFormModel.objects.filter(
                 user_profile=user_profile,
@@ -328,8 +477,6 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
             .values('month', 'daily_symptoms')
             .annotate(symptom_count=Count('id'))
         )
-
-        # Get moods data
         moods_data = (
             HealthAndCycleFormModel.objects.filter(
                 user_profile=user_profile,
@@ -339,7 +486,6 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
             .values('month', 'daily_mood')
             .annotate(mood_count=Count('id'))
         )
-
         monthly_stats = self._process_monthly_stats(symptoms_data, moods_data)
         return self._generate_pdf(request, monthly_data, monthly_stats)
 
@@ -347,35 +493,43 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
         monthly_stats = {
             month: {
                 'most_common_symptom': {'name': 'None', 'count': 0},
-                'most_common_mood': {'name': 'None', 'count': 0}
+                'most_common_mood': {'name': 'None', 'count': 0},
             }
             for month in range(1, 13)
         }
 
-        # Process symptoms
+        symptom_counts = defaultdict(lambda: defaultdict(int))
         for data in symptoms_data:
-            month = data['month']
-            count = data['symptom_count']
-            if count > monthly_stats[month]['most_common_symptom']['count']:
-                symptom_name = dict(HealthAndCycleFormModel.SYMPTOM_CHOICES).get(
-                    data['daily_symptoms'], 'Unknown'
+            month_idx = data['month'] - 1
+            for symptom in data['daily_symptoms']:
+                symptom_counts[month_idx][symptom] += 1
+
+        for month_idx in range(12):
+            if symptom_counts[month_idx]:
+                most_common_symptom = max(
+                    symptom_counts[month_idx].items(),
+                    key=lambda x: x[1]
                 )
-                monthly_stats[month]['most_common_symptom'] = {
-                    'name': symptom_name,
-                    'count': count
+                monthly_stats[month_idx + 1]['most_common_symptom'] = {
+                    'name': most_common_symptom[0],
+                    'count': most_common_symptom[1]
                 }
 
-        # Process moods
+        mood_counts = defaultdict(lambda: defaultdict(int))
         for data in moods_data:
-            month = data['month']
-            count = data['mood_count']
-            if count > monthly_stats[month]['most_common_mood']['count']:
-                mood_name = dict(HealthAndCycleFormModel.MOOD_CHOICES).get(
-                    data['daily_mood'], 'Unknown'
+            month_idx = data['month'] - 1
+            for mood in data['daily_mood']:
+                mood_counts[month_idx][mood] += 1
+
+        for month_idx in range(12):
+            if mood_counts[month_idx]:
+                most_common_mood = max(
+                    mood_counts[month_idx].items(),
+                    key=lambda x: x[1]
                 )
-                monthly_stats[month]['most_common_mood'] = {
-                    'name': mood_name,
-                    'count': count
+                monthly_stats[month_idx + 1]['most_common_mood'] = {
+                    'name': most_common_mood[0],
+                    'count': most_common_mood[1]
                 }
 
         return monthly_stats
@@ -423,8 +577,6 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
             month = data['month']
             month_name = calendar.month_name[month]
             stats = monthly_stats[month]
-
-            # Draw row data
             p.drawString(50, y, month_name)
             p.drawString(150, y, f"{data['average_pain_level']:.1f}" if data['average_pain_level'] else "N/A")
 
@@ -441,8 +593,6 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
             p.drawString(450, y, str(data['event_count']))
 
             y -= 30
-
-            # Handle page overflow
             if y < 50:
                 p.showPage()
                 y = self._draw_column_headers(p)

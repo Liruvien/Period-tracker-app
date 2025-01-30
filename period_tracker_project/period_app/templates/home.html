@@ -1,16 +1,68 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}Home - Period Tracker App{% endblock %}
-
 {% block content %}
 <div class="container mt-4">
     <header>
         <h1>Welcome to the Period Tracker App!</h1>
         <p>Track your cycles, log your symptoms, and monitor your health in a simple way.</p>
-        <p><a href="{% url 'calendar' %}" class="btn btn-custom">Calendar</a></p>
-        <p><a href="{% url 'statistics' %}" class="btn btn-custom">Statistics</a></p>
-        <p><a href="{% url 'knowledge_base' %}" class="btn btn-custom">Knowledge Base</a></p>
-        <p><a href="{% url 'form' %}" class="btn btn-custom">Cycle Health Form</a></p>
     </header>
 </div>
+<div class="container mx-auto px-4 py-8 bg-light">
+    {% if error %}
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+            <span class="block sm:inline">{{ error }}</span>
+        </div>
+    {% else %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-2xl font-bold mb-4">Twój cykl</h2>
+                <p class="mb-2">Dzień cyklu: {{ cycle_info.cycle_day }}</p>
+                <p class="mb-2">Aktualna faza: {{ current_phase }}</p>
+                <p class="mb-4">Następna miesiączka: {{ next_period|date:"d.m.Y" }}</p>
+            </div>
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-2xl font-bold mb-4">Poziomy hormonów</h2>
+                <div class="space-y-2">
+                    {% for hormone, level in hormone_levels.items %}
+                    <div class="flex items-center">
+                        <span class="w-32">{{ hormone|title }}:</span>
+                        <div class="w-full bg-gray-200 rounded">
+                            <div class="bg-blue-500 rounded h-2" style="width: {{ level }}%"></div>
+                        </div>
+                        <span class="ml-2">{{ level }}%</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow-md p-6 md:col-span-2">
+                <h2 class="text-2xl font-bold mb-4">Informacje o fazie</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <h3 class="font-bold mb-2">Opis</h3>
+                        <p>{{ phase_info.description }}</p>
+                    </div>
+                    <div>
+                        <h3 class="font-bold mb-2">Możliwe objawy</h3>
+                        <p>{{ phase_info.symptoms }}</p>
+                    </div>
+                    <div>
+                        <h3 class="font-bold mb-2">Zalecenia</h3>
+                        <p>{{ phase_info.recommendations }}</p>
+                    </div>
+                    <div>
+                        <h3 class="font-bold mb-2">Ćwiczenia</h3>
+                        <p>{{ phase_info.exercise }}</p>
+                    </div>
+                    <div class="md:col-span-2">
+                        <h3 class="font-bold mb-2">Odżywianie</h3>
+                        <p>{{ phase_info.nutrition }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
 {% endblock %}
+
