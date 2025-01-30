@@ -1,8 +1,16 @@
+"""
+This module contains utility functions for calculating menstrual cycle phases.
+"""
+
 from datetime import timedelta
 
 def calculate_cycle_phases(menstruation_phase_start, menstruation_phase_end, cycle_length, months_to_predict=12):
     """Calculate cycle phases with null safety checks."""
-    if not all([menstruation_phase_start, menstruation_phase_end, cycle_length]):
+    if not all((
+        menstruation_phase_start,
+        menstruation_phase_end,
+        cycle_length
+    )):
         return []
 
     try:
@@ -29,22 +37,22 @@ def calculate_cycle_phases(menstruation_phase_start, menstruation_phase_end, cyc
                 'Menstruation': {
                     'start': current_menstruation_start,
                     'end': current_menstruation_end,
-                    'color': 'red'  # light red
+                    'color': 'red'
                 },
                 'Follicular': {
                     'start': follicular_start,
                     'end': follicular_end,
-                    'color': 'green'  # light green
+                    'color': 'green'
                 },
                 'Ovulation': {
                     'start': ovulation_start,
                     'end': ovulation_end,
-                    'color': 'orange'  # light orange
+                    'color': 'orange'
                 },
                 'Luteal': {
                     'start': luteal_start,
                     'end': luteal_end,
-                    'color': 'purple'  # light purple
+                    'color': 'purple'
                 }
             })
         return phases

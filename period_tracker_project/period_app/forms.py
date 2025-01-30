@@ -1,13 +1,17 @@
-from django import forms
-from .models import HealthAndCycleFormModel
+"""
+This module contains forms for user authentication and health cycle tracking in the period_app.
+"""
+
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
+from django import forms
+from .models import HealthAndCycleFormModel
 
 
 class CustomUserCreationForm(UserCreationForm):
     """
-    User creation form.
+    User creation form that includes an email field.
     """
     email = forms.EmailField(
         label="Email",
@@ -15,12 +19,14 @@ class CustomUserCreationForm(UserCreationForm):
         widget=forms.EmailInput(attrs={'class': 'form-control'}),
         help_text="Enter email."
     )
+
     class Meta:
         model = get_user_model()
         fields = ['username', 'email', 'password1', 'password2']
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-control'}),
         }
+
     def save(self, commit=True):
         user = super().save(commit=False)
         user.email = self.cleaned_data['email']
@@ -33,7 +39,7 @@ class CustomUserCreationForm(UserCreationForm):
 
 class UserLoginForm(forms.Form):
     """
-    User login form.
+    User login form with username and password fields.
     """
     username = forms.CharField(
         label="Username",
@@ -185,34 +191,34 @@ class HealthAndCycleForm(forms.ModelForm):
     allergies = forms.CharField(
         label="Alergie",
         required=False,
-        widget=forms.Textarea(attrs={'placeholder': 'Wpisz alergie', 'rows': 3})
+        widget=forms.Textarea(attrs={'placeholder': "Wpisz alergie", "rows": 3})
     )
 
     medications = forms.CharField(
         label="Leki",
         required=False,
-        widget=forms.Textarea(attrs={'placeholder': 'Wpisz przyjmowane leki', 'rows': 3})
+        widget=forms.Textarea(attrs={'placeholder': "Wpisz przyjmowane leki", "rows": 3})
     )
 
     health_condition = forms.CharField(
         label="Stan zdrowia",
         required=False,
-        widget=forms.Textarea(attrs={'placeholder': 'Opisz stan zdrowia', 'rows': 3})
+        widget=forms.Textarea(attrs={'placeholder': "Opisz stan zdrowia", "rows": 3})
     )
 
     def __init__(self, *args, **kwargs):
         initial_date = kwargs.get('initial', {}).get('date', timezone.now().date())
-        if 'initial' not in kwargs:
-            kwargs['initial'] = {}
-        kwargs['initial']['date'] = initial_date
+        if "initial" not in kwargs:
+            kwargs["initial"] = {}
+        kwargs["initial"]["date"] = initial_date
         super().__init__(*args, **kwargs)
 
     def clean(self):
         cleaned_data = super().clean()
-        daily_symptoms = cleaned_data.get('daily_symptoms', [])
-        daily_mood = cleaned_data.get('daily_mood', [])
+        daily_symptoms = cleaned_data.get("daily_symptoms", [])
+        daily_mood = cleaned_data.get("daily_mood", [])
         if daily_symptoms:
-            cleaned_data['daily_symptoms'] = list(daily_symptoms)
+            cleaned_data["daily_symptoms"] = list(daily_symptoms)
         if daily_mood:
-            cleaned_data['daily_mood'] = list(daily_mood)
+            cleaned_data["daily_mood"] = list(daily_mood)
         return cleaned_data

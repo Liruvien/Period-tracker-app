@@ -23,12 +23,8 @@ from reportlab.pdfgen import canvas
 from io import BytesIO
 from typing import Dict
 from collections import defaultdict
-from typing import TYPE_CHECKING
 from typing import Any
 
-
-if TYPE_CHECKING:
-    from .models import UserProfile
 
 class RegisterView(CreateView):
     """
@@ -239,7 +235,7 @@ class CalendarView(LoginRequiredMixin, TemplateView):
             return self.get_events(request)
         return render(request, self.template_name)
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request):
         """
         Handles POST requests for deleting calendar events and redirect to form .
         """
@@ -332,7 +328,7 @@ class CycleHealthFormView(LoginRequiredMixin, View):
         form = HealthAndCycleForm(initial={'date': selected_date})
         return render(request, self.template_name, {'form': form})
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request):
         """
         Handles POST requests to save the form data.
         """
@@ -451,7 +447,7 @@ class StatisticsView(LoginRequiredMixin, TemplateView):
 
 
 class ExportStatisticsPDFView(LoginRequiredMixin, View):
-    def get(self, request, *args, **kwargs):
+    def get(self, request):
         user_profile = request.user.userprofile
         today = now().date()
         one_year_ago = today - timedelta(days=365)
@@ -650,5 +646,3 @@ class HealthDuringPregnancyView(LoginRequiredMixin, TemplateView):
 
     def get(self, request, *args, **kwargs):
         return render(request, self.template_name)
-
-

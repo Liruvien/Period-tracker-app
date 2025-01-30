@@ -1,3 +1,7 @@
+"""
+This module registers the models for the period_app with the Django admin site.
+"""
+
 from django.contrib import admin
 from period_app.models import (
     UserProfile,
