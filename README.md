@@ -24,13 +24,13 @@ Project Structure
 
 period_tracker_project/
 │-- period_app/
-│   ├── models.py        # Data models (users, cycles, health)
-│   ├── views.py         # Application logic
-│   ├── urls.py          # URL routing
-│   ├── utils.py         # Utility functions
-│   ├── templates/       # HTML templates for UI
-│   ├── static/          # CSS, JS files
-│-- manage.py            # Django management script
+│   ├── models.py
+│   ├── views.py
+│   ├── urls.py
+│   ├── utils.py
+│   ├── templates/
+│   ├── static/
+│-- manage.py
 
 Installation and Configuration
 
