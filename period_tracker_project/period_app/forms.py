@@ -92,7 +92,7 @@ class HealthAndCycleForm(forms.ModelForm):
 
     first_day_of_cycle = forms.DateField(
         label="Pierwszy dzien cyklu",
-        required=True,
+        required=False,
         widget=forms.DateInput(attrs={'type': 'date'})
     )
 

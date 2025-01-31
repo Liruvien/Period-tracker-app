@@ -91,6 +91,7 @@ function calculatePhasesForDay(date, cycleData) {
     menstruationEnd.setHours(0, 0, 0, 0);
 
     const cycleLength = parseInt(cycleData.cycle_length);
+    const menstruationLength = parseInt(cycleData.period_length) || 6;
 
     const daysSinceStart = Math.floor((currentDate - menstruationStart) / (1000 * 60 * 60 * 24));
     const currentCycleNumber = Math.floor(daysSinceStart / cycleLength);
@@ -119,7 +120,20 @@ function calculatePhasesForDay(date, cycleData) {
 
     const currentCycleEnd = new Date(currentCycleStart);
     currentCycleEnd.setDate(currentCycleStart.getDate() + cycleLength - 1);
+    let cycleStart = new Date(menstruationStart);
+    while (cycleStart <= currentDate) {
+        let cycleEnd = new Date(cycleStart);
+        cycleEnd.setDate(cycleStart.getDate() + cycleLength - 1);
 
+        let menstruationEnd = new Date(cycleStart);
+        menstruationEnd.setDate(cycleStart.getDate() + menstruationLength - 1);
+
+        if (currentDate >= cycleStart && currentDate <= menstruationEnd) {
+            return 'red';
+        }
+
+        cycleStart.setDate(cycleStart.getDate() + cycleLength);
+    }
     if (currentDate >= currentCycleStart && currentDate <= currentCycleMenstruationEnd) {
         return 'red';
     } else if (currentDate >= currentCycleFollicularStart && currentDate <= currentCycleFollicularEnd) {
@@ -142,42 +156,70 @@ function calculatePhasesForDay(date, cycleData) {
             right: 'dayGridMonth,timeGridWeek'
         },
         selectable: true,
-        dayCellDidMount: function(arg) {
-            const date = arg.date;
-            const dateStr = date.toISOString().split('T')[0];
+    dayCellDidMount: function(arg) {
+        const date = arg.date;
+        const dateStr = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
 
-            fetch('{% url "calendar" %}', {
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                }
-            })
-            .then(response => response.json())
-            .then(events => {
-                const relevantEvent = events.find(event => {
-                    if (!event.first_day_of_cycle) return false;
-                    const cycleStart = new Date(event.first_day_of_cycle);
-                    const yearLater = new Date(cycleStart);
-                    yearLater.setFullYear(yearLater.getFullYear() + 1);
-                    return date >= cycleStart && date <= yearLater;
-                });
+        fetch('{% url "calendar" %}', {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+            }
+        })
+        .then(response => response.json())
+        .then(events => {
+            // Znajdź event dla tego dnia
+            const eventForDay = events.find(event =>
+                event.start === dateStr
+            );
 
-                if (relevantEvent) {
-                    const color = calculatePhasesForDay(dateStr, relevantEvent);
-                    if (color) {
-                        arg.el.style.backgroundColor = color;
-                    }
+            if (eventForDay) {
+                const menstruationStart = new Date(eventForDay.menstruation_phase_start);
+                const menstruationEnd = new Date(eventForDay.menstruation_phase_end);
+
+                menstruationStart.setHours(0, 0, 0, 0);
+                menstruationEnd.setHours(0, 0, 0, 0);
+                date.setHours(0, 0, 0, 0);
+
+                if (date >= menstruationStart && date <= menstruationEnd) {
+                    arg.el.style.backgroundColor = 'red';
+                    return;
                 }
+            }
+            const relevantEvent = events.find(event => {
+                if (!event.menstruation_phase_start) return false;
+                const cycleStart = new Date(event.menstruation_phase_start);
+                const yearLater = new Date(cycleStart);
+                yearLater.setFullYear(yearLater.getFullYear() + 1);
+                const currentDate = new Date(dateStr);
+                return currentDate >= cycleStart && currentDate <= yearLater;
             });
-        },
+
+            if (relevantEvent) {
+                const color = calculatePhasesForDay(dateStr, relevantEvent);
+                if (color) {
+                    arg.el.style.backgroundColor = color;
+                }
+            }
+        });
+    },
         dateClick: function(info) {
             const selectedDate = info.dateStr;
             document.getElementById('addEventLink').href = `/cycle-health-form-view/?date=${selectedDate}`;
             new bootstrap.Modal(document.getElementById('addEventModal')).show();
         },
         eventDidMount: function(info) {
-            info.el.style.cursor = 'pointer';
+            const date = info.event.start;
+            const dateStr = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+            const eventProps = info.event.extendedProps;
+            if (new Date(eventProps.menstruation_phase_start).toDateString() === date.toDateString()) {
+                const dayEl = info.el.closest('.fc-day');
+                if (dayEl) {
+                    dayEl.style.backgroundColor = 'red';
+                }
+            info.el.style.border = '2px solid black';
+            }
         },
-        eventClick: function(info) {
+            eventClick: function(info) {
             currentEventId = info.event.id;
             let details = '';
             const fields = {
@@ -262,6 +304,7 @@ function calculatePhasesForDay(date, cycleData) {
                         calendar.refetchEvents();
                         const modal = bootstrap.Modal.getInstance(document.getElementById('showEventModal'));
                         modal.hide();
+                        window.location.reload();
                     } else {
                         alert('Błąd podczas usuwania wydarzenia: ' + (data.error || 'Nieznany błąd'));
                     }

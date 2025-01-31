@@ -1,88 +1,55 @@
-# Period Tracker App
+## Period Tracker App
 
-A Django application that allows users to track their menstrual cycle, analyze health statistics, and access valuable information about women's health. The project includes a range of features such as user registration, login, cycle management, statistics generation, and a knowledge base on hormonal health.
+Project Description
+
+Period Tracker App is an application designed to track menstrual cycles, hormonal health, and overall well-being. The app allows users to log symptoms, monitor moods, and analyze cycle statistics.
+
 Features
+    • Registration and Login – Users can create an account and log in.
+    • Cycle Calendar – An interactive calendar to track menstrual cycle phases.
+    • Health and Cycle Form – Users can log symptoms, mood, and other health-related data.
+    • Statistics – Analysis of cycle, symptoms, pain levels, and moods based on collected data.
+    • PDF Export – Ability to export cycle statistics in PDF format.
+    • Knowledge Base – Access to articles and information on hormonal and menstrual health.
 
-    User Registration and Login:
-        Secure user registration.
-        Login and logout functionality.
+Technologies
 
-    Home Page:
-        A clear and intuitive interface providing access to the app's core features.
+The application is built using:
+    • Backend: Django (Python)
+    • Frontend: HTML, CSS, JavaScript
+    • Database: PostgreSQL
+    • Report Generation: ReportLab (PDF)
 
-    Calendar:
-        Displays the user's menstrual cycle.
-        Allows adding and editing cycle health information.
+Project Structure
 
-    Statistics:
-        Analyzes menstrual cycle statistics.
-        Exports statistics to a PDF file.
+period_tracker_project/
+│-- period_app/
+│   ├── models.py        # Data models (users, cycles, health)
+│   ├── views.py         # Application logic
+│   ├── urls.py          # URL routing
+│   ├── utils.py         # Utility functions
+│   ├── templates/       # HTML templates for UI
+│   ├── static/          # CSS, JS files
+│-- manage.py            # Django management script
 
-    Knowledge Base:
-        Articles on hormonal health, diet, self-care during menstruation, and pregnancy-related health.
+Installation and Configuration
 
-Installation
-Prerequisites
+    1. Clone the repository:
+       git clone https://github.com/user/period-tracker.git
+       cd period-tracker
 
-    Python 3.8
-    Django 4.0
-    Virtualenv
+    2. Create and activate a virtual environment:
+       python3 -m venv venv
+       source venv/bin/activate  # (Windows: venv\Scripts\activate)
 
-Installation Steps
+    3. Install dependencies:
+       pip install -r requirements.txt
 
-    Clone the repository:
+    4. Apply database migrations:
+       python manage.py migrate
 
-git clone x(link or SSH)
-cd repository-name
+    5. Run the development server:
+       python manage.py runserver
 
-Create and activate a virtual environment:
-
-python -m venv venv
-source venv/bin/activate   # for Linux/MacOS
-venv\Scripts\activate      # for Windows
-
-Install dependencies:
-
-pip install -r requirements.txt
-
-Apply migrations:
-
-python manage.py makemigrations
-python manage.py migrate
-
-Run the development server:
-
-    python manage.py runserver
-    Open the app in your browser at http://127.0.0.1:8000.
-
-URL Paths
-
-    admin/: Django Admin Panel.
-    register/: User registration.
-    login/: User login.
-    logout/: User logout.
-    /: Home page.
-    calendar/: Menstrual cycle calendar.
-    statistics/: Health statistics view.
-    statistics/export/pdf/: Export statistics to a PDF file.
-    knowledge-base/: Knowledge base with articles.
-    cycle-health-form-view/: Cycle health form view.
-    hormonalne-zdrowie/: Article on hormonal health.
-    dieta-wplywajaca-pozytywnie-na-kobiece-hormony/: Article on diet and hormonal health.
-    zaopiekuj-sie-soba-podczas-miesiaczki/: Self-care tips during menstruation.
-    zdrowie-kobiet-podczas-ciazy/: Health information for pregnancy.
-
-Technology Stack
-
-    Backend: Django 4.x
-    Frontend: HTML, CSS
-    Database: PostgreSQL
-    Other Tools: ReportLab (for PDF generation)
-
-Usage
-
-    Register as a new user.
-    Log in to the application.
-    Add menstrual cycle data via the calendar view.
-    Analyze your cycle statistics in the statistics view.
-    Explore articles in the knowledge base.
+License
+This project is released under the GNU General Public License v3.0

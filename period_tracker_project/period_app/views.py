@@ -1,3 +1,12 @@
+"""
+This file contains the views for the application period_app.
+"""
+
+from datetime import datetime, timedelta
+from typing import Dict, Any
+from io import BytesIO
+from collections import defaultdict
+
 from django.views import View
 from django.views.generic.edit import FormView
 from django.views.generic import CreateView, TemplateView
@@ -9,21 +18,19 @@ from django.shortcuts import render, redirect
 from django.http import JsonResponse, HttpResponseBadRequest, HttpResponse
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
+from django.utils.timezone import now
 from django.contrib import messages
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.units import inch
+
 from .forms import UserLoginForm, HealthAndCycleForm, CustomUserCreationForm
 from .models import HealthAndCycleFormModel, UserProfile
 from .utils import calculate_cycle_phases
-from django.utils.timezone import now
-from django.db.models import Avg, Count
-import calendar
-from datetime import datetime, timedelta
-from django.db.models.functions import ExtractMonth
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-from io import BytesIO
-from typing import Dict
-from collections import defaultdict
-from typing import Any
+
 
 
 class RegisterView(CreateView):
@@ -71,7 +78,6 @@ class CustomLogoutView(LogoutView):
     """
     next_page = reverse_lazy('login')
 
-
 class Home(LoginRequiredMixin, View):
     """
     Home view for logged-in users. Displays current cycle information.
@@ -106,28 +112,48 @@ class Home(LoginRequiredMixin, View):
         return render(request, self.template_name, context)
 
     def get_current_cycle_info(self, user_profile) -> Dict[str, Any] | None:
-        latest_entry = (HealthAndCycleFormModel.objects
-                        .filter(user_profile=user_profile)
-                        .order_by('-menstruation_phase_start')
-                        .first())
+        """
+        Retrieve the current cycle information.
+        """
+        latest_period_entry = (HealthAndCycleFormModel.objects
+                             .filter(
+                                user_profile=user_profile,
+                                menstruation_phase_start__isnull=False
+                             )
+                             .order_by('-menstruation_phase_start')
+                             .first())
 
-        if not latest_entry or not latest_entry.menstruation_phase_start:
+        if not latest_period_entry:
             return None
 
         today = datetime.now().date()
-        start_date = latest_entry.menstruation_phase_start
+        start_date = latest_period_entry.menstruation_phase_start
+        if latest_period_entry.cycle_length:
+            cycle_length = latest_period_entry.cycle_length
+        else:
+            cycle_length = 28
         days_since_start = (today - start_date).days
-        current_cycle_day = (days_since_start % (latest_entry.cycle_length or 28)) + 1
+        if days_since_start >= 0:
+            current_cycle_day = (days_since_start % cycle_length) + 1
+        else:
+            return None
+        first_day = None
+        if latest_period_entry.first_day_of_cycle:
+            first_day = latest_period_entry.first_day_of_cycle
+        else:
+            first_day = start_date
 
         return {
             'cycle_day': current_cycle_day,
-            'cycle_length': latest_entry.cycle_length,
-            'first_day': latest_entry.first_day_of_cycle,
-            'period_length': latest_entry.period_length
+            'cycle_length': cycle_length,
+            'first_day': first_day,
+            'period_length': latest_period_entry.period_length or 6,
         }
 
     def get_phase_for_day(self, cycle_day: int, cycle_length: int) -> str:
-        """Determine cycle phase for given day."""
+        """
+        Determine cycle phase for given day.
+        """
         phase_lengths = {
             'menstruation': 6,
             'follicular': 9,
@@ -137,14 +163,16 @@ class Home(LoginRequiredMixin, View):
 
         if cycle_day <= phase_lengths['menstruation']:
             return 'menstruation'
-        elif cycle_day <= phase_lengths['menstruation'] + phase_lengths['follicular']:
+        if cycle_day <= phase_lengths['menstruation'] + phase_lengths['follicular']:
             return 'follicular'
-        elif cycle_day <= phase_lengths['menstruation'] + phase_lengths['follicular'] + phase_lengths['ovulation']:
+        if cycle_day <= phase_lengths['menstruation'] + phase_lengths['follicular'] + phase_lengths['ovulation']:
             return 'ovulation'
         return 'luteal'
 
     def get_hormone_levels(self, phase: str) -> Dict[str, float]:
-        """Return approximate hormone levels for given phase."""
+        """
+        Return approximate hormone levels for given phase.
+        """
         hormone_levels = {
             'menstruation': {
                 'estrogen': 20.0,
@@ -174,7 +202,10 @@ class Home(LoginRequiredMixin, View):
         return hormone_levels.get(phase, {})
 
     def get_phase_description(self, phase: str) -> Dict[str, str]:
-        """Zwraca opis i zalecenia dla danej fazy cyklu"""
+        """
+        Returns a description of the given menstrual cycle phase, including symptoms,
+        recommendations, exercise advice, and nutritional guidelines.
+        """
         descriptions = {
             'menstruation': {
                 'description': 'Rozpoczyna się nowy cykl. Poziom hormonów jest niski.',
@@ -208,6 +239,9 @@ class Home(LoginRequiredMixin, View):
         return descriptions.get(phase, {})
 
     def predict_next_period(self, cycle_info: Dict) -> datetime.date:
+        """
+        Predicts the next expected period start date based on the provided cycle information.
+        """
         if not cycle_info or not cycle_info.get('first_day'):
             return None
 
@@ -218,7 +252,6 @@ class Home(LoginRequiredMixin, View):
         next_period = first_day + timedelta(days=(completed_cycles + 1) * cycle_length)
 
         return next_period
-
 
 class CalendarView(LoginRequiredMixin, TemplateView):
     """
@@ -251,6 +284,9 @@ class CalendarView(LoginRequiredMixin, TemplateView):
 
     @staticmethod
     def get_events(request):
+        """
+        Retrieves and processes menstrual cycle events.
+        """
         events = HealthAndCycleFormModel.objects.filter(user_profile=request.user.userprofile)
         events_data = []
 
@@ -299,7 +335,6 @@ class CalendarView(LoginRequiredMixin, TemplateView):
     def delete_event(request):
         """
         Deletes an existing event.
-        :return: JSON response indicating the result of the operation.
         """
         event_id = request.POST.get('event_id')
         try:
@@ -346,199 +381,163 @@ class CycleHealthFormView(LoginRequiredMixin, View):
 
 
 class StatisticsView(LoginRequiredMixin, TemplateView):
+    """
+    View for displaying user statistics related to menstrual cycle tracking.
+    """
     template_name = 'statistics.html'
 
     def get_context_data(self, **kwargs):
+        """
+        Retrieves and processes menstrual cycle-related data for the authenticated user.
+        """
         context = super().get_context_data(**kwargs)
         user_profile = UserProfile.objects.get(user=self.request.user)
         today = now().date()
         one_year_ago = today - timedelta(days=365)
 
-        monthly_data = (
-            HealthAndCycleFormModel.objects.filter(
-                user_profile=user_profile,
-                recorded_at__date__gte=one_year_ago
-            )
-            .annotate(month=ExtractMonth('recorded_at'))
-            .values('month')
-            .annotate(
-                average_pain_level=Avg('average_pain_level'),
-                event_count=Count('id')
-            )
-            .order_by('month')
-        )
+        forms = HealthAndCycleFormModel.objects.filter(
+            user_profile=user_profile,
+            recorded_at__date__gte=one_year_ago
+        ).order_by('recorded_at')
 
-        symptoms_data = (
-            HealthAndCycleFormModel.objects.filter(
-                user_profile=user_profile,
-                recorded_at__date__gte=one_year_ago
-            )
-            .exclude(daily_symptoms=[])
-            .annotate(month=ExtractMonth('recorded_at'))
-            .values('month', 'daily_symptoms')
-        )
+        symptom_data = defaultdict(list)
+        for form in forms:
+            date_str = form.recorded_at.strftime('%Y-%m-%d')
+            for symptom in form.daily_symptoms:
+                symptom_data[symptom].append(date_str)
 
-        moods_data = (
-            HealthAndCycleFormModel.objects.filter(
-                user_profile=user_profile,
-                recorded_at__date__gte=one_year_ago
-            )
-            .exclude(daily_mood=[])
-            .annotate(month=ExtractMonth('recorded_at'))
-            .values('month', 'daily_mood')
-        )
+        mood_data = defaultdict(list)
+        for form in forms:
+            date_str = form.recorded_at.strftime('%Y-%m-%d')
+            for mood in form.daily_mood:
+                mood_data[mood].append(date_str)
 
-        months = [calendar.month_name[i] for i in range(1, 13)]
-        pain_levels = [0] * 12
-        event_counts = [0] * 12
-
-        monthly_symptoms = [{'symptom': 'None', 'count': 0} for _ in range(12)]
-        monthly_moods = [{'mood': 'None', 'count': 0} for _ in range(12)]
-
-        for data in monthly_data:
-            month_idx = data['month'] - 1
-            pain_levels[month_idx] = round(data['average_pain_level'], 2) if data['average_pain_level'] else 0
-            event_counts[month_idx] = data['event_count']
-
-        symptom_counts = defaultdict(lambda: defaultdict(int))
-        for data in symptoms_data:
-            month_idx = data['month'] - 1
-            for symptom in data['daily_symptoms']:
-                symptom_counts[month_idx][symptom] += 1
-
-        for month_idx in range(12):
-            if symptom_counts[month_idx]:
-                most_common_symptom = max(
-                    symptom_counts[month_idx].items(),
-                    key=lambda x: x[1]
-                )
-                monthly_symptoms[month_idx] = {
-                    'symptom': most_common_symptom[0],
-                    'count': most_common_symptom[1]
-                }
-
-        mood_counts = defaultdict(lambda: defaultdict(int))
-        for data in moods_data:
-            month_idx = data['month'] - 1
-            for mood in data['daily_mood']:
-                mood_counts[month_idx][mood] += 1
-
-        for month_idx in range(12):
-            if mood_counts[month_idx]:
-                most_common_mood = max(
-                    mood_counts[month_idx].items(),
-                    key=lambda x: x[1]
-                )
-                monthly_moods[month_idx] = {
-                    'mood': most_common_mood[0],
-                    'count': most_common_mood[1]
-                }
+        pain_data = defaultdict(list)
+        for form in forms:
+            date_str = form.recorded_at.strftime('%Y-%m-%d')
+            if form.average_pain_level:
+                pain_level = int(form.average_pain_level)
+                pain_data[pain_level].append(date_str)
 
         context['chart_data'] = {
-            'months': months,
-            'pain_levels': pain_levels,
-            'event_counts': event_counts,
-            'monthly_symptoms': [item['symptom'] for item in monthly_symptoms],
-            'monthly_moods': [item['mood'] for item in monthly_moods],
-            'symptom_counts': [item['count'] for item in monthly_symptoms],
-            'mood_counts': [item['count'] for item in monthly_moods],
+            'symptoms': {
+                'labels': list(symptom_data.keys()),
+                'data': [len(dates) for dates in symptom_data.values()],
+                'dates': list(symptom_data.values())
+            },
+            'moods': {
+                'labels': list(mood_data.keys()),
+                'data': [len(dates) for dates in mood_data.values()],
+                'dates': list(mood_data.values())
+            },
+            'pain_levels': {
+                'labels': list(map(str, pain_data.keys())),
+                'data': [len(dates) for dates in pain_data.values()],
+                'dates': list(pain_data.values())
+            }
         }
         return context
 
 
 class ExportStatisticsPDFView(LoginRequiredMixin, View):
+    """
+    View for exporting user statistics related to menstrual cycle tracking as a PDF.
+    """
     def get(self, request):
+        """
+        Handles GET requests to generate a PDF report of user statistics.
+        """
         user_profile = request.user.userprofile
         today = now().date()
         one_year_ago = today - timedelta(days=365)
-        monthly_data = (
-            HealthAndCycleFormModel.objects.filter(
-                user_profile=user_profile,
-                recorded_at__date__gte=one_year_ago
-            )
-            .annotate(month=ExtractMonth('recorded_at'))
-            .values('month')
-            .annotate(
-                average_pain_level=Avg('average_pain_level'),
-                event_count=Count('id')
-            )
-            .order_by('month')
-        )
-        symptoms_data = (
-            HealthAndCycleFormModel.objects.filter(
-                user_profile=user_profile,
-                recorded_at__date__gte=one_year_ago
-            )
-            .annotate(month=ExtractMonth('recorded_at'))
-            .values('month', 'daily_symptoms')
-            .annotate(symptom_count=Count('id'))
-        )
-        moods_data = (
-            HealthAndCycleFormModel.objects.filter(
-                user_profile=user_profile,
-                recorded_at__date__gte=one_year_ago
-            )
-            .annotate(month=ExtractMonth('recorded_at'))
-            .values('month', 'daily_mood')
-            .annotate(mood_count=Count('id'))
-        )
-        monthly_stats = self._process_monthly_stats(symptoms_data, moods_data)
-        return self._generate_pdf(request, monthly_data, monthly_stats)
 
-    def _process_monthly_stats(self, symptoms_data, moods_data):
-        monthly_stats = {
-            month: {
-                'most_common_symptom': {'name': 'None', 'count': 0},
-                'most_common_mood': {'name': 'None', 'count': 0},
-            }
-            for month in range(1, 13)
-        }
+        forms = HealthAndCycleFormModel.objects.filter(
+            user_profile=user_profile,
+            recorded_at__date__gte=one_year_ago
+        ).order_by('recorded_at')
 
-        symptom_counts = defaultdict(lambda: defaultdict(int))
-        for data in symptoms_data:
-            month_idx = data['month'] - 1
-            for symptom in data['daily_symptoms']:
-                symptom_counts[month_idx][symptom] += 1
+        symptom_data = defaultdict(list)
+        mood_data = defaultdict(list)
+        pain_data = defaultdict(list)
 
-        for month_idx in range(12):
-            if symptom_counts[month_idx]:
-                most_common_symptom = max(
-                    symptom_counts[month_idx].items(),
-                    key=lambda x: x[1]
-                )
-                monthly_stats[month_idx + 1]['most_common_symptom'] = {
-                    'name': most_common_symptom[0],
-                    'count': most_common_symptom[1]
-                }
+        for form in forms:
+            date_str = form.recorded_at.strftime('%Y-%m-%d')
+            for symptom in form.daily_symptoms:
+                symptom_data[symptom].append(date_str)
+            for mood in form.daily_mood:
+                mood_data[mood].append(date_str)
+            if form.average_pain_level:
+                pain_level = int(form.average_pain_level)
+                pain_data[pain_level].append(date_str)
 
-        mood_counts = defaultdict(lambda: defaultdict(int))
-        for data in moods_data:
-            month_idx = data['month'] - 1
-            for mood in data['daily_mood']:
-                mood_counts[month_idx][mood] += 1
+        return self._generate_pdf(request, symptom_data, mood_data, pain_data)
 
-        for month_idx in range(12):
-            if mood_counts[month_idx]:
-                most_common_mood = max(
-                    mood_counts[month_idx].items(),
-                    key=lambda x: x[1]
-                )
-                monthly_stats[month_idx + 1]['most_common_mood'] = {
-                    'name': most_common_mood[0],
-                    'count': most_common_mood[1]
-                }
+    def _create_table(self, data, title):
+        """
+        Creates a formatted table for the PDF report.
+        """
+        styles = getSampleStyleSheet()
+        elements = []
 
-        return monthly_stats
+        elements.append(Paragraph(title, styles['Heading1']))
+        elements.append(Spacer(1, 0.2 * inch))
 
-    def _generate_pdf(self, request, monthly_data, monthly_stats):
+        table_data = [['Type', 'Number of occurrences', 'Daty']]
+        for item, dates in data.items():
+            table_data.append([
+                Paragraph(str(item), styles['Normal']),
+                Paragraph(str(len(dates)), styles['Normal']),
+                Paragraph(', '.join(dates), styles['Normal'])
+            ])
+
+        table = Table(table_data, colWidths=[2 * inch, 2 * inch, 4 * inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('PADDING', (0, 0), (-1, -1), 6),
+        ]))
+
+        elements.append(table)
+        elements.append(Spacer(1, 0.3 * inch))
+        return elements
+
+    def _generate_pdf(self, request, symptom_data, mood_data, pain_data):
+        """
+        Generates a PDF report containing menstrual cycle statistics.
+        """
         buffer = BytesIO()
-        p = canvas.Canvas(buffer, pagesize=letter)
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            rightMargin=0.5 * inch,
+            leftMargin=0.5 * inch,
+            topMargin=0.5 * inch,
+            bottomMargin=0.5 * inch
+        )
 
-        self._draw_header(p, request)
-        y = self._draw_column_headers(p)
-        self._draw_data_rows(p, monthly_data, monthly_stats, y)
+        styles = getSampleStyleSheet()
+        elements = []
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Title'],
+            fontSize=24,
+            spaceAfter=30
+        )
+        elements.append(Paragraph(f"Statistics for user: {request.user.username}", title_style))
+        elements.append(Paragraph(f"Data: {now().date().strftime('%Y-%m-%d')}", styles['Normal']))
+        elements.append(Spacer(1, 0.4 * inch))
 
-        p.save()
+        elements.extend(self._create_table(symptom_data, "Symptoms"))
+        elements.extend(self._create_table(mood_data, "Moods"))
+        elements.extend(self._create_table(pain_data, "Average pain day level"))
+
+        doc.build(elements)
         pdf = buffer.getvalue()
         buffer.close()
 
@@ -547,102 +546,42 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
         response.write(pdf)
         return response
 
-    def _draw_header(self, p, request):
-        p.setFont("Helvetica-Bold", 14)
-        p.drawString(50, 800, "User Statistics Report")
-        p.drawString(50, 780, f"User: {request.user.username}")
-        p.drawString(50, 760, f"Date: {now().date().strftime('%Y-%m-%d')}")
-
-    def _draw_column_headers(self, p):
-        y = 720
-        p.setFont("Helvetica-Bold", 12)
-        p.drawString(50, y, "Month")
-        p.drawString(150, y, "Pain Level")
-        p.drawString(250, y, "Most Common")
-        p.drawString(250, y - 15, "Symptom")
-        p.drawString(350, y, "Most Common")
-        p.drawString(350, y - 15, "Mood")
-        p.drawString(450, y, "Event")
-        p.drawString(450, y - 15, "Count")
-        return y - 40
-
-    def _draw_data_rows(self, p, monthly_data, monthly_stats, y):
-        p.setFont("Helvetica", 10)
-
-        for data in monthly_data:
-            month = data['month']
-            month_name = calendar.month_name[month]
-            stats = monthly_stats[month]
-            p.drawString(50, y, month_name)
-            p.drawString(150, y, f"{data['average_pain_level']:.1f}" if data['average_pain_level'] else "N/A")
-
-            symptom_text = f"{stats['most_common_symptom']['name']}"
-            symptom_count = f"({stats['most_common_symptom']['count']})"
-            p.drawString(250, y, symptom_text)
-            p.drawString(250, y - 12, symptom_count)
-
-            mood_text = f"{stats['most_common_mood']['name']}"
-            mood_count = f"({stats['most_common_mood']['count']})"
-            p.drawString(350, y, mood_text)
-            p.drawString(350, y - 12, mood_count)
-
-            p.drawString(450, y, str(data['event_count']))
-
-            y -= 30
-            if y < 50:
-                p.showPage()
-                y = self._draw_column_headers(p)
 
 class KnowledgeBaseView(LoginRequiredMixin, TemplateView):
     """
     View for displaying the knowledge base page.
     """
-    redirect_field_name = 'next'
     template_name = 'knowledge_base.html'
-
-    def get(self, request, *args, **kwargs):
-        return render(request, self.template_name)
+    redirect_field_name = 'next'
 
 
 class HormonalHealthView(LoginRequiredMixin, TemplateView):
     """
     View for displaying the hormonal health page.
     """
+    template_name = 'hormonal_health.html'
     redirect_field_name = 'next'
-    html_name = 'hormonal_health.html'
-
-    def get(self, request, *args, **kwargs):
-        return render(request, self.html_name)
 
 
 class DietImpactView(LoginRequiredMixin, TemplateView):
     """
     View for displaying the diet impact page.
     """
-    redirect_field_name = 'next'
     template_name = 'diet_impact.html'
-
-    def get(self, request, *args, **kwargs):
-        return render(request, self.template_name)
+    redirect_field_name = 'next'
 
 
 class SelfCareDuringMenstruationView(LoginRequiredMixin, TemplateView):
     """
-    View for displaying page with self-care recommendations during menstruation .
+    View for displaying the page with self-care recommendations during menstruation.
     """
-    redirect_field_name = 'next'
     template_name = 'self_care_menstruation.html'
-
-    def get(self, request, *args, **kwargs):
-        return render(request, self.template_name)
+    redirect_field_name = 'next'
 
 
 class HealthDuringPregnancyView(LoginRequiredMixin, TemplateView):
     """
-    View for displaying page with health-care recommendations during pregnancy .
+    View for displaying the page with health-care recommendations during pregnancy.
     """
-    redirect_field_name = 'next'
     template_name = 'health_during_pregnancy.html'
-
-    def get(self, request, *args, **kwargs):
-        return render(request, self.template_name)
+    redirect_field_name = 'next'
