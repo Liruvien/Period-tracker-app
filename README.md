@@ -20,18 +20,6 @@ The application is built using:
     • Database: PostgreSQL
     • Report Generation: ReportLab (PDF)
 
-Project Structure
-
-period_tracker_project/
-│-- period_app/
-│   ├── models.py
-│   ├── views.py
-│   ├── urls.py
-│   ├── utils.py
-│   ├── templates/
-│   ├── static/
-│-- manage.py
-
 Installation and Configuration
 
     1. Clone the repository:
