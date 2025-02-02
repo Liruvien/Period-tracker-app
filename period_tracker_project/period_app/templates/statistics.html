@@ -4,7 +4,6 @@
 <div class="container mt-5">
     <h1 class="mb-4">Statystyki</h1>
     <a href="{% url 'export_statistics_pdf' %}" class="btn btn-primary mb-4">Download PDF</a>
-
     <div class="row">
         <div class="col-12 mb-4">
             <div class="card">
@@ -14,7 +13,6 @@
             </div>
         </div>
     </div>
-
     <div class="row">
         <div class="col-12 mb-4">
             <div class="card">
@@ -24,7 +22,6 @@
             </div>
         </div>
     </div>
-
     <div class="row">
         <div class="col-12 mb-4">
             <div class="card">
@@ -35,11 +32,9 @@
         </div>
     </div>
 </div>
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     const chartData = {{ chart_data|safe }};
-
     function createChart(ctx, data, title, color) {
         return new Chart(ctx, {
             type: 'bar',
@@ -88,14 +83,10 @@
             }
         });
     }
-
-    // Create charts
     const symptomsCtx = document.getElementById('symptomsChart').getContext('2d');
     createChart(symptomsCtx, chartData.symptoms, 'Objawy', 'rgba(54, 162, 235, 0.6)');
-
     const moodsCtx = document.getElementById('moodsChart').getContext('2d');
     createChart(moodsCtx, chartData.moods, 'Nastroje', 'rgba(75, 192, 192, 0.6)');
-
     const painLevelsCtx = document.getElementById('painLevelsChart').getContext('2d');
     createChart(painLevelsCtx, chartData.pain_levels, 'Poziomy bólu', 'rgba(255, 99, 132, 0.6)');
 </script>

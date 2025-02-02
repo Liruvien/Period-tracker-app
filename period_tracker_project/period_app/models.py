@@ -2,6 +2,7 @@
 Django models for managing user profiles, menstrual cycle tracking, and health information.
 This module provides the data structure for storing and managing user health data.
 """
+
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings

@@ -32,7 +32,6 @@ from .models import HealthAndCycleFormModel, UserProfile
 from .utils import calculate_cycle_phases
 
 
-
 class RegisterView(CreateView):
     """
     View for user registration. Handles the form for creating a new user.
@@ -78,6 +77,7 @@ class CustomLogoutView(LogoutView):
     """
     next_page = reverse_lazy('login')
 
+
 class Home(LoginRequiredMixin, View):
     """
     Home view for logged-in users. Displays current cycle information.
@@ -89,17 +89,17 @@ class Home(LoginRequiredMixin, View):
         """Handle GET request and display cycle information."""
         try:
             user_profile = request.user.userprofile
-            cycle_info = self.get_current_cycle_info(user_profile)
+            cycle_info = self._get_current_cycle_info(user_profile)
         except AttributeError:
             return render(request, self.template_name, {'error': 'User profile not found'})
 
         if not cycle_info:
             return render(request, self.template_name, {'error': 'Brak danych o cyklu'})
 
-        current_phase = self.get_phase_for_day(cycle_info['cycle_day'], cycle_info['cycle_length'])
-        hormone_levels = self.get_hormone_levels(current_phase)
-        phase_info = self.get_phase_description(current_phase)
-        next_period = self.predict_next_period(cycle_info)
+        current_phase = self._get_phase_for_day(cycle_info['cycle_day'], cycle_info['cycle_length'])
+        hormone_levels = self._get_hormone_levels(current_phase)
+        phase_info = self._get_phase_description(current_phase)
+        next_period = self._predict_next_period(cycle_info)
 
         context = {
             'cycle_info': cycle_info,
@@ -111,37 +111,32 @@ class Home(LoginRequiredMixin, View):
 
         return render(request, self.template_name, context)
 
-    def get_current_cycle_info(self, user_profile) -> Dict[str, Any] | None:
+    @staticmethod
+    def _get_current_cycle_info(user_profile) -> Dict[str, Any] | None:
         """
         Retrieve the current cycle information.
         """
         latest_period_entry = (HealthAndCycleFormModel.objects
-                             .filter(
-                                user_profile=user_profile,
-                                menstruation_phase_start__isnull=False
-                             )
-                             .order_by('-menstruation_phase_start')
-                             .first())
+                               .filter(
+            user_profile=user_profile,
+            menstruation_phase_start__isnull=False
+        )
+                               .order_by('-menstruation_phase_start')
+                               .first())
 
         if not latest_period_entry:
             return None
 
         today = datetime.now().date()
         start_date = latest_period_entry.menstruation_phase_start
-        if latest_period_entry.cycle_length:
-            cycle_length = latest_period_entry.cycle_length
-        else:
-            cycle_length = 28
+        cycle_length = latest_period_entry.cycle_length or 28
         days_since_start = (today - start_date).days
-        if days_since_start >= 0:
-            current_cycle_day = (days_since_start % cycle_length) + 1
-        else:
+
+        if days_since_start < 0:
             return None
-        first_day = None
-        if latest_period_entry.first_day_of_cycle:
-            first_day = latest_period_entry.first_day_of_cycle
-        else:
-            first_day = start_date
+
+        current_cycle_day = (days_since_start % cycle_length) + 1
+        first_day = latest_period_entry.first_day_of_cycle or start_date
 
         return {
             'cycle_day': current_cycle_day,
@@ -150,7 +145,8 @@ class Home(LoginRequiredMixin, View):
             'period_length': latest_period_entry.period_length or 6,
         }
 
-    def get_phase_for_day(self, cycle_day: int, cycle_length: int) -> str:
+    @staticmethod
+    def _get_phase_for_day(cycle_day: int, cycle_length: int) -> str:
         """
         Determine cycle phase for given day.
         """
@@ -169,7 +165,8 @@ class Home(LoginRequiredMixin, View):
             return 'ovulation'
         return 'luteal'
 
-    def get_hormone_levels(self, phase: str) -> Dict[str, float]:
+    @staticmethod
+    def _get_hormone_levels(phase: str) -> Dict[str, float]:
         """
         Return approximate hormone levels for given phase.
         """
@@ -201,10 +198,10 @@ class Home(LoginRequiredMixin, View):
         }
         return hormone_levels.get(phase, {})
 
-    def get_phase_description(self, phase: str) -> Dict[str, str]:
+    @staticmethod
+    def _get_phase_description(phase: str) -> Dict[str, str]:
         """
-        Returns a description of the given menstrual cycle phase, including symptoms,
-        recommendations, exercise advice, and nutritional guidelines.
+        Returns a description of the given menstrual cycle phase.
         """
         descriptions = {
             'menstruation': {
@@ -238,9 +235,10 @@ class Home(LoginRequiredMixin, View):
         }
         return descriptions.get(phase, {})
 
-    def predict_next_period(self, cycle_info: Dict) -> datetime.date:
+    @staticmethod
+    def _predict_next_period(cycle_info: Dict) -> datetime.date:
         """
-        Predicts the next expected period start date based on the provided cycle information.
+        Predicts the next expected period start date.
         """
         if not cycle_info or not cycle_info.get('first_day'):
             return None
@@ -253,6 +251,7 @@ class Home(LoginRequiredMixin, View):
 
         return next_period
 
+
 class CalendarView(LoginRequiredMixin, TemplateView):
     """
     Calendar view for user health and cycle events. Allows viewing and managing events.
@@ -264,7 +263,7 @@ class CalendarView(LoginRequiredMixin, TemplateView):
         """
         Handles GET requests for rendering the calendar page or responding with AJAX data.
         """
-        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest': #aktualny zalecany sposob sprawdzania żądań AJAX, to samo mam w js
             return self.get_events(request)
         return render(request, self.template_name)
 
@@ -296,10 +295,9 @@ class CalendarView(LoginRequiredMixin, TemplateView):
             event_date = datetime.combine(event.date, datetime.min.time())
             event_color = None
             menstruation_start = datetime.combine(event.menstruation_phase_start,
-                                                  datetime.min.time()) if event.menstruation_phase_start else None
+                                                  datetime.min.time()) if event.menstruation_phase_start else None  # noqa
             menstruation_end = datetime.combine(event.menstruation_phase_end,
-                                                datetime.min.time()) if event.menstruation_phase_end else None
-
+                                                datetime.min.time()) if event.menstruation_phase_end else None  # noqa
             for phase_set in phases:
                 for phase_name, phase_info in phase_set.items():
                     if phase_info['start'] <= event_date.date() <= phase_info['end']:
@@ -443,6 +441,7 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
     """
     View for exporting user statistics related to menstrual cycle tracking as a PDF.
     """
+
     def get(self, request):
         """
         Handles GET requests to generate a PDF report of user statistics.
@@ -472,26 +471,14 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
 
         return self._generate_pdf(request, symptom_data, mood_data, pain_data)
 
-    def _create_table(self, data, title):
+    @staticmethod
+    def _create_table(data, title):
         """
         Creates a formatted table for the PDF report.
         """
         styles = getSampleStyleSheet()
-        elements = []
 
-        elements.append(Paragraph(title, styles['Heading1']))
-        elements.append(Spacer(1, 0.2 * inch))
-
-        table_data = [['Type', 'Number of occurrences', 'Daty']]
-        for item, dates in data.items():
-            table_data.append([
-                Paragraph(str(item), styles['Normal']),
-                Paragraph(str(len(dates)), styles['Normal']),
-                Paragraph(', '.join(dates), styles['Normal'])
-            ])
-
-        table = Table(table_data, colWidths=[2 * inch, 2 * inch, 4 * inch])
-        table.setStyle(TableStyle([
+        table_style = [
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
@@ -501,10 +488,29 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('PADDING', (0, 0), (-1, -1), 6),
-        ]))
+        ]
 
-        elements.append(table)
-        elements.append(Spacer(1, 0.3 * inch))
+        elements = [
+            Paragraph(title, styles['Heading1']),
+            Spacer(1, 0.2 * inch)
+        ]
+
+        table_data = [['Type', 'Number of occurrences', 'Dates']]
+        for item, dates in data.items():
+            table_data.append([
+                Paragraph(str(item), styles['Normal']),
+                Paragraph(str(len(dates)), styles['Normal']),
+                Paragraph(', '.join(dates), styles['Normal'])
+            ])
+
+        table = Table(table_data, colWidths=[2 * inch, 2 * inch, 4 * inch])
+        table.setStyle(TableStyle(table_style))
+
+        elements.extend([
+            table,
+            Spacer(1, 0.3 * inch)
+        ])
+
         return elements
 
     def _generate_pdf(self, request, symptom_data, mood_data, pain_data):
@@ -522,16 +528,18 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
         )
 
         styles = getSampleStyleSheet()
-        elements = []
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Title'],
             fontSize=24,
             spaceAfter=30
         )
-        elements.append(Paragraph(f"Statistics for user: {request.user.username}", title_style))
-        elements.append(Paragraph(f"Data: {now().date().strftime('%Y-%m-%d')}", styles['Normal']))
-        elements.append(Spacer(1, 0.4 * inch))
+
+        elements = [
+            Paragraph(f"Statistics for user: {request.user.username}", title_style),
+            Paragraph(f"Date: {now().date().strftime('%Y-%m-%d')}", styles['Normal']),
+            Spacer(1, 0.4 * inch)
+        ]
 
         elements.extend(self._create_table(symptom_data, "Symptoms"))
         elements.extend(self._create_table(mood_data, "Moods"))
