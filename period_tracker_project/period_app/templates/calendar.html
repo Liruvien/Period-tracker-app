@@ -3,6 +3,7 @@
 {% load static %}
 {% block content %}
 <div class="container mt-4">
+    <!-- Legenda faz cyklu -->
     <div class="row mb-3">
         <div class="col">
             <div class="card">
@@ -33,6 +34,8 @@
     <h1 class="text-center">Kalendarz cyklu</h1>
     <div id="calendar">{% csrf_token %}</div>
 </div>
+
+<!-- Modal do dodawania eventu -->
 <div class="modal fade" id="addEventModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -47,6 +50,7 @@
     </div>
 </div>
 
+<!-- Modal do wyświetlania szczegółów eventu -->
 <div class="modal fade" id="showEventModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -66,85 +70,104 @@
 {% endblock %}
 
 {% block extra_js %}
-<link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.10.1/main.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.10.1/main.min.js"></script>
+<link href="{% static 'css/fullcalendar.min.css' %}" rel="stylesheet">
+<script src="{% static 'js/fullcalendar.min.js' %}"></script>
+<script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Pobranie elementu kalendarza oraz tokena CSRF z DOM
     const calendarEl = document.getElementById('calendar');
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-    let currentEventId = null;
+    let currentEventId = null; // ID aktualnie wybranego wydarzenia
 
-function calculatePhasesForDay(date, cycleData) {
-    if (!cycleData.menstruation_phase_start || !cycleData.menstruation_phase_end || !cycleData.cycle_length) {
+    // Funkcja obliczająca kolor odpowiadający fazie cyklu dla podanej daty
+    function calculatePhasesForDay(date, cycleData) {
+        // Sprawdzenie, czy dane o fazach są dostępne
+        if (!cycleData.menstruation_phase_start || !cycleData.menstruation_phase_end || !cycleData.cycle_length) {
+            return null;
+        }
+
+        const currentDate = new Date(date);
+        currentDate.setHours(0, 0, 0, 0);
+
+        // Pobranie dat rozpoczęcia i zakończenia menstruacji
+        const menstruationStart = new Date(cycleData.menstruation_phase_start);
+        menstruationStart.setHours(0, 0, 0, 0);
+
+        const menstruationEnd = new Date(cycleData.menstruation_phase_end);
+        menstruationEnd.setHours(0, 0, 0, 0);
+
+        const cycleLength = parseInt(cycleData.cycle_length);
+        const menstruationLength = parseInt(cycleData.period_length) || 6;
+
+        // Obliczenie liczby dni od początku pierwszego cyklu
+        const daysSinceStart = Math.floor((currentDate - menstruationStart) / (1000 * 60 * 60 * 24));
+        const currentCycleNumber = Math.floor(daysSinceStart / cycleLength);
+
+        // Wyznaczenie początku aktualnego cyklu
+        const currentCycleStart = new Date(menstruationStart);
+        currentCycleStart.setDate(menstruationStart.getDate() + (currentCycleNumber * cycleLength));
+
+        // Obliczenie końca fazy menstruacji w bieżącym cyklu
+        const currentCycleMenstruationEnd = new Date(currentCycleStart);
+        const menstruationDuration = Math.floor((menstruationEnd - menstruationStart) / (1000 * 60 * 60 * 24)) + 1;
+        currentCycleMenstruationEnd.setDate(currentCycleStart.getDate() + menstruationDuration - 1);
+
+        // Obliczenie pozostałych dni cyklu po fazie menstruacji
+        const remainingDays = cycleLength - menstruationDuration;
+        // Faza folikularna – przyjete, że trwa około połowy pozostałych dni (pomniejszone o 1 dzień na owulację)
+        const follicularDays = Math.floor((remainingDays - 1) / 2);
+
+        // Wyznaczenie początku i końca fazy folikularnej
+        const currentCycleFollicularStart = new Date(currentCycleMenstruationEnd);
+        currentCycleFollicularStart.setDate(currentCycleMenstruationEnd.getDate() + 1);
+
+        const currentCycleFollicularEnd = new Date(currentCycleFollicularStart);
+        currentCycleFollicularEnd.setDate(currentCycleFollicularStart.getDate() + follicularDays - 1);
+
+        // Wyznaczenie dnia owulacji – przyjete, że jest to dzień następujący po fazie folikularnej
+        const currentCycleOvulationStart = new Date(currentCycleFollicularEnd);
+        currentCycleOvulationStart.setDate(currentCycleFollicularEnd.getDate() + 1);
+
+        // Faza lutealna zaczyna się dzień po owulacji
+        const currentCycleLutealStart = new Date(currentCycleOvulationStart);
+        currentCycleLutealStart.setDate(currentCycleOvulationStart.getDate() + 1);
+
+        // Obliczenie końca bieżącego cyklu
+        const currentCycleEnd = new Date(currentCycleStart);
+        currentCycleEnd.setDate(currentCycleStart.getDate() + cycleLength - 1);
+
+        // Pętla pomocnicza – sprawdzamy, czy data nie należy do wcześniejszego cyklu
+        let cycleStart = new Date(menstruationStart);
+        while (cycleStart <= currentDate) {
+            let cycleEnd = new Date(cycleStart);
+            cycleEnd.setDate(cycleStart.getDate() + cycleLength - 1);
+
+            let menstruationEnd = new Date(cycleStart);
+            menstruationEnd.setDate(cycleStart.getDate() + menstruationLength - 1);
+
+            if (currentDate >= cycleStart && currentDate <= menstruationEnd) {
+                return 'red';
+            }
+
+            cycleStart.setDate(cycleStart.getDate() + cycleLength);
+        }
+
+        // Określenie, do której fazy należy data
+        if (currentDate >= currentCycleStart && currentDate <= currentCycleMenstruationEnd) {
+            return 'red';
+        } else if (currentDate >= currentCycleFollicularStart && currentDate <= currentCycleFollicularEnd) {
+            return 'green';
+        } else if (currentDate.getTime() === currentCycleOvulationStart.getTime()) {
+            return 'orange';
+        } else if (currentDate >= currentCycleLutealStart && currentDate <= currentCycleEnd) {
+            return 'purple';
+        }
+
         return null;
     }
 
-    const currentDate = new Date(date);
-    currentDate.setHours(0, 0, 0, 0);
-
-    const menstruationStart = new Date(cycleData.menstruation_phase_start);
-    menstruationStart.setHours(0, 0, 0, 0);
-
-    const menstruationEnd = new Date(cycleData.menstruation_phase_end);
-    menstruationEnd.setHours(0, 0, 0, 0);
-
-    const cycleLength = parseInt(cycleData.cycle_length);
-    const menstruationLength = parseInt(cycleData.period_length) || 6;
-
-    const daysSinceStart = Math.floor((currentDate - menstruationStart) / (1000 * 60 * 60 * 24));
-    const currentCycleNumber = Math.floor(daysSinceStart / cycleLength);
-
-    const currentCycleStart = new Date(menstruationStart);
-    currentCycleStart.setDate(menstruationStart.getDate() + (currentCycleNumber * cycleLength));
-
-    const currentCycleMenstruationEnd = new Date(currentCycleStart);
-    const menstruationDuration = Math.floor((menstruationEnd - menstruationStart) / (1000 * 60 * 60 * 24)) + 1;
-    currentCycleMenstruationEnd.setDate(currentCycleStart.getDate() + menstruationDuration - 1);
-
-    const remainingDays = cycleLength - menstruationDuration;
-    const follicularDays = Math.floor((remainingDays - 1) / 2);
-
-    const currentCycleFollicularStart = new Date(currentCycleMenstruationEnd);
-    currentCycleFollicularStart.setDate(currentCycleMenstruationEnd.getDate() + 1);
-
-    const currentCycleFollicularEnd = new Date(currentCycleFollicularStart);
-    currentCycleFollicularEnd.setDate(currentCycleFollicularStart.getDate() + follicularDays - 1);
-
-    const currentCycleOvulationStart = new Date(currentCycleFollicularEnd);
-    currentCycleOvulationStart.setDate(currentCycleFollicularEnd.getDate() + 1);
-
-    const currentCycleLutealStart = new Date(currentCycleOvulationStart);
-    currentCycleLutealStart.setDate(currentCycleOvulationStart.getDate() + 1);
-
-    const currentCycleEnd = new Date(currentCycleStart);
-    currentCycleEnd.setDate(currentCycleStart.getDate() + cycleLength - 1);
-    let cycleStart = new Date(menstruationStart);
-    while (cycleStart <= currentDate) {
-        let cycleEnd = new Date(cycleStart);
-        cycleEnd.setDate(cycleStart.getDate() + cycleLength - 1);
-
-        let menstruationEnd = new Date(cycleStart);
-        menstruationEnd.setDate(cycleStart.getDate() + menstruationLength - 1);
-
-        if (currentDate >= cycleStart && currentDate <= menstruationEnd) {
-            return 'red';
-        }
-
-        cycleStart.setDate(cycleStart.getDate() + cycleLength);
-    }
-    if (currentDate >= currentCycleStart && currentDate <= currentCycleMenstruationEnd) {
-        return 'red';
-    } else if (currentDate >= currentCycleFollicularStart && currentDate <= currentCycleFollicularEnd) {
-        return 'green';
-    } else if (currentDate.getTime() === currentCycleOvulationStart.getTime()) {
-        return 'orange';
-    } else if (currentDate >= currentCycleLutealStart && currentDate <= currentCycleEnd) {
-        return 'purple';
-    }
-
-    return null;
-}
-
+    // Inicjalizacja kalendarza FullCalendar
     const calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
         locale: 'pl',
@@ -154,72 +177,89 @@ function calculatePhasesForDay(date, cycleData) {
             right: 'dayGridMonth,timeGridWeek'
         },
         selectable: true,
-    dayCellDidMount: function(arg) {
-        const date = arg.date;
-        const dateStr = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
 
-        fetch('{% url "calendar" %}', {
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-            }
-        })
-        .then(response => response.json())
-        .then(events => {
-            // Znajdź event dla tego dnia
-            const eventForDay = events.find(event =>
-                event.start === dateStr
-            );
+        // Pobieranie eventow dla danych dni i farbowanie
+        dayCellDidMount: function(arg) {
+            const date = arg.date;
+            const dateStr = date.getFullYear() + '-' +
+                String(date.getMonth() + 1).padStart(2, '0') + '-' +
+                String(date.getDate()).padStart(2, '0');
 
-            if (eventForDay) {
-                const menstruationStart = new Date(eventForDay.menstruation_phase_start);
-                const menstruationEnd = new Date(eventForDay.menstruation_phase_end);
-
-                menstruationStart.setHours(0, 0, 0, 0);
-                menstruationEnd.setHours(0, 0, 0, 0);
-                date.setHours(0, 0, 0, 0);
-
-                if (date >= menstruationStart && date <= menstruationEnd) {
-                    arg.el.style.backgroundColor = 'red';
-                    return;
+            // Pobranie eventow z serwera
+            fetch('{% url "calendar" %}', {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
                 }
-            }
-            const relevantEvent = events.find(event => {
-                if (!event.menstruation_phase_start) return false;
-                const cycleStart = new Date(event.menstruation_phase_start);
-                const yearLater = new Date(cycleStart);
-                yearLater.setFullYear(yearLater.getFullYear() + 1);
-                const currentDate = new Date(dateStr);
-                return currentDate >= cycleStart && currentDate <= yearLater;
+            })
+            .then(response => response.json())
+            .then(events => {
+                // Znalezienie eventu przypisanego do danej daty
+                const eventForDay = events.find(event =>
+                    event.start === dateStr
+                );
+
+                if (eventForDay) {
+                    // Farbowanie daty w okresie fazy menstruacji na czerwono
+                    const menstruationStart = new Date(eventForDay.menstruation_phase_start);
+                    const menstruationEnd = new Date(eventForDay.menstruation_phase_end);
+
+                    menstruationStart.setHours(0, 0, 0, 0);
+                    menstruationEnd.setHours(0, 0, 0, 0);
+                    date.setHours(0, 0, 0, 0);
+
+                    if (date >= menstruationStart && date <= menstruationEnd) {
+                        arg.el.style.backgroundColor = 'red';
+                        return;
+                    }
+                }
+                // Szukanie bezpośredniego eventu, a jak nie ma to szukanie eventu, którego data startu znajduje się w przedziale jednego roku od daty rozpoczęcia cyklu
+                const relevantEvent = events.find(event => {
+                    if (!event.menstruation_phase_start) return false;
+                    const cycleStart = new Date(event.menstruation_phase_start);
+                    const yearLater = new Date(cycleStart);
+                    yearLater.setFullYear(yearLater.getFullYear() + 1);
+                    const currentDate = new Date(dateStr);
+                    return currentDate >= cycleStart && currentDate <= yearLater;
+                });
+
+                if (relevantEvent) {
+                    // Obliczenie koloru fazy dla danej daty i ustawienie tła komórki
+                    // el odnosi się do elementu DOM związanego z danym eventem lub dniem w kalendarzu. Jest to standardowa właściwość w FullCalendar. Kod został sprawdzony i używa poprawnej właściwości.
+
+                    const color = calculatePhasesForDay(dateStr, relevantEvent);
+                    if (color) {
+                        arg.el.style.backgroundColor = color;
+                    }
+                }
             });
+        },
 
-            if (relevantEvent) {
-                const color = calculatePhasesForDay(dateStr, relevantEvent);
-                if (color) {
-                    arg.el.style.backgroundColor = color;
-                }
-            }
-        });
-    },
+        // Obsługa kliknięcia w date
         dateClick: function(info) {
             const selectedDate = info.dateStr;
+            // Aktualizacja linku do formularza o datę wybraną przez użytkownika
             document.getElementById('addEventLink').href = `/cycle-health-form-view/?date=${selectedDate}`;
             new bootstrap.Modal(document.getElementById('addEventModal')).show();
         },
+
+        // Obsługa farbowania tla daty miesiaczki i obramowania eventu miesiaczki
         eventDidMount: function(info) {
             const date = info.event.start;
-            const dateStr = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
             const eventProps = info.event.extendedProps;
             if (new Date(eventProps.menstruation_phase_start).toDateString() === date.toDateString()) {
                 const dayEl = info.el.closest('.fc-day');
                 if (dayEl) {
                     dayEl.style.backgroundColor = 'red';
                 }
-            info.el.style.border = '2px solid black';
+                info.el.style.border = '2px solid black';
             }
         },
-            eventClick: function(info) {
+
+        // Obsługa kliknięcia w event
+        eventClick: function(info) {
             currentEventId = info.event.id;
             let details = '';
+            // Pola i etykiety do wyświetlenia jesli byly wypelnione
             const fields = {
                 'Event': info.event.title,
                 'Date': info.event.start ? info.event.start.toLocaleDateString('pl-PL') : null,
@@ -236,6 +276,7 @@ function calculatePhasesForDay(date, cycleData) {
                 'Health Condition': info.event.extendedProps.health_condition
             };
 
+            // Generowanie calendar.html z danymi eventu
             for (const [label, value] of Object.entries(fields)) {
                 if (value) {
                     if (Array.isArray(value)) {
@@ -249,6 +290,8 @@ function calculatePhasesForDay(date, cycleData) {
             document.getElementById('eventDetails').innerHTML = details || '<p>Brak szczegółów do wyświetlenia.</p>';
             new bootstrap.Modal(document.getElementById('showEventModal')).show();
         },
+
+        // Pobieranie eventow z serwera i mapowanie ich do FullCalendar.
         events: function(fetchInfo, successCallback, failureCallback) {
             fetch('{% url "calendar" %}', {
                 headers: {
@@ -281,6 +324,7 @@ function calculatePhasesForDay(date, cycleData) {
         }
     });
 
+    // Obsługa przycisku usuwania eventu – wysyłanie żądanie do serwera o usunięciu eventu po ID, odświeżenie kalendarza i zamykniecie modalu.
     document.getElementById('deleteEventBtn').addEventListener('click', function() {
         if (currentEventId) {
             if (confirm('Czy na pewno chcesz usunąć to wydarzenie?')) {
@@ -299,6 +343,7 @@ function calculatePhasesForDay(date, cycleData) {
                 .then(response => response.json())
                 .then(data => {
                     if (data.message) {
+                        // Odświeżenie wydarzeń i zamknięcie modala
                         calendar.refetchEvents();
                         const modal = bootstrap.Modal.getInstance(document.getElementById('showEventModal'));
                         modal.hide();
@@ -315,6 +360,7 @@ function calculatePhasesForDay(date, cycleData) {
         }
     });
 
+    // Renderowanie kalendarza
     calendar.render();
 });
 </script>

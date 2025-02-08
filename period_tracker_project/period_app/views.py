@@ -286,7 +286,11 @@ class CalendarView(LoginRequiredMixin, TemplateView):
         """
         Retrieves and processes menstrual cycle events.
         """
-        events = HealthAndCycleFormModel.objects.filter(user_profile=request.user.userprofile)
+        try:
+            user_profile = request.user.userprofile
+            events = HealthAndCycleFormModel.objects.filter(user_profile=user_profile)
+        except AttributeError:
+            return JsonResponse({"error": "User profile not found"}, status=400)
         events_data = []
 
         for event in events:
@@ -294,10 +298,10 @@ class CalendarView(LoginRequiredMixin, TemplateView):
                                             event.cycle_length)
             event_date = datetime.combine(event.date, datetime.min.time())
             event_color = None
-            menstruation_start = datetime.combine(event.menstruation_phase_start,
-                                                  datetime.min.time()) if event.menstruation_phase_start else None  # noqa
-            menstruation_end = datetime.combine(event.menstruation_phase_end,
-                                                datetime.min.time()) if event.menstruation_phase_end else None  # noqa
+            _menstruation_start = datetime.combine(event.menstruation_phase_start,
+                                                  datetime.min.time()) if event.menstruation_phase_start else None
+            _menstruation_end = datetime.combine(event.menstruation_phase_end,
+                                                datetime.min.time()) if event.menstruation_phase_end else None
             for phase_set in phases:
                 for phase_name, phase_info in phase_set.items():
                     if phase_info['start'] <= event_date.date() <= phase_info['end']:

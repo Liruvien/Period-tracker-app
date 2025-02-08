@@ -2,12 +2,15 @@
 This file contains the views for the application period_app.
 """
 
+from datetime import timedelta
+
 import pytest
 from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
-from datetime import timedelta
+
 from period_app.models import CustomUser, UserProfile, HealthAndCycleFormModel
+
 
 
 @pytest.mark.django_db
@@ -79,7 +82,7 @@ class TestLoginView:
             'password': 'testpassword123'
         })
         assert response.status_code == 302
-        assert response.url == reverse('home')
+        assert response['Location'] == reverse('home')
 
     def test_invalid_credentials(self, user):
         """
@@ -120,12 +123,12 @@ class TestHomeView:
         """
         user = CustomUser.objects.get(username='testuser')
         HealthAndCycleFormModel.objects.create(
-            user_profile=user.userprofile,
+            user_profile=UserProfile.objects.get(user=user),
             menstruation_phase_start=timezone.now().date(),
             cycle_length=28,
             period_length=5
         )
-        
+
         response = authenticated_client.get(reverse('home'))
         assert response.status_code == 200
         assert 'cycle_info' in response.context
@@ -162,7 +165,7 @@ class TestCalendarView:
         """
         client, user = authenticated_client
         HealthAndCycleFormModel.objects.create(
-            user_profile=user.userprofile,
+            user_profile=UserProfile.objects.get(user=user),
             date=timezone.now().date(),
             event="Test Event",
             menstruation_phase_start=timezone.now().date(),
@@ -182,7 +185,7 @@ class TestCalendarView:
         """
         client, user = authenticated_client
         event = HealthAndCycleFormModel.objects.create(
-            user_profile=user.userprofile,
+            user_profile=UserProfile.objects.get(user=user),
             date=timezone.now().date(),
             event="Test Event"
         )
@@ -233,9 +236,9 @@ class TestCycleHealthFormView:
 
         response = client.post(reverse('form'), form_data)
         assert response.status_code == 302
-        assert response.url == reverse('calendar')
+        assert response['Location'] == reverse('calendar')
         assert HealthAndCycleFormModel.objects.filter(
-            user_profile=user.userprofile,
+            user_profile=UserProfile.objects.get(user=user),
             event='Test Event'
         ).exists()
 
@@ -265,7 +268,7 @@ class TestStatisticsView:
         """
         client, user = authenticated_client
         HealthAndCycleFormModel.objects.create(
-            user_profile=user.userprofile,
+            user_profile=UserProfile.objects.get(user=user),
             date=timezone.now().date(),
             daily_symptoms=['Ból głowy'],
             daily_mood=['Szczęście'],
@@ -286,7 +289,7 @@ class TestStatisticsView:
         """
         client, user = authenticated_client
         HealthAndCycleFormModel.objects.create(
-            user_profile=user.userprofile,
+            user_profile=UserProfile.objects.get(user=user),
             date=timezone.now().date(),
             daily_symptoms=['Ból głowy'],
             daily_mood=['Szczęście'],
