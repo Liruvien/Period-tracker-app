@@ -16,7 +16,6 @@ from django.contrib.auth import login, authenticate
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import render, redirect
 from django.http import JsonResponse, HttpResponseBadRequest, HttpResponse
-from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
 from django.utils.timezone import now
 from django.contrib import messages
@@ -272,14 +271,9 @@ class CalendarView(LoginRequiredMixin, TemplateView):
         Handles POST requests for deleting calendar events and redirect to form .
         """
         action = request.POST.get('action')
-        try:
-            if action == 'delete':
-                return self.delete_event(request)
-            return HttpResponseBadRequest("Incorrect action")
-        except PermissionDenied as e:
-            return JsonResponse({"error": str(e)}, status=403)
-        except ValidationError as e:
-            return JsonResponse({"error": f"Validation error: {e}"}, status=400)
+        if action == 'delete':
+            return self.delete_event(request)
+        return HttpResponseBadRequest("Incorrect action")
 
     @staticmethod
     def get_events(request):
@@ -456,7 +450,7 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
 
         forms = HealthAndCycleFormModel.objects.filter(
             user_profile=user_profile,
-            recorded_at__date__gte=one_year_ago
+            recorded_at__date__gte=one_year_ago #filtr formularzy od roku w tyl do dzis
         ).order_by('recorded_at')
 
         symptom_data = defaultdict(list)
@@ -482,7 +476,7 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
         """
         styles = getSampleStyleSheet()
 
-        table_style = [
+        table_style = [ #tworzenie tabelki w ReportLab dla dokumentu pdf - style tabeli, kolor nagłówka, rozmiary czcionek i siatkę, zeby sie wszystko zmiscilo
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
@@ -495,11 +489,11 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
         ]
 
         elements = [
-            Paragraph(title, styles['Heading1']),
+            Paragraph(title, styles['Heading1']),#tworzenie nagłowka tabelek
             Spacer(1, 0.2 * inch)
         ]
 
-        table_data = [['Type', 'Number of occurrences', 'Dates']]
+        table_data = [['Type', 'Number of occurrences', 'Dates']] #definiowanienagłowka kolumny, dodanie wierszy
         for item, dates in data.items():
             table_data.append([
                 Paragraph(str(item), styles['Normal']),
@@ -507,7 +501,7 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
                 Paragraph(', '.join(dates), styles['Normal'])
             ])
 
-        table = Table(table_data, colWidths=[2 * inch, 2 * inch, 4 * inch])
+        table = Table(table_data, colWidths=[2 * inch, 2 * inch, 4 * inch]) #szerokosc
         table.setStyle(TableStyle(table_style))
 
         elements.extend([
@@ -521,8 +515,8 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
         """
         Generates a PDF report containing menstrual cycle statistics.
         """
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(
+        buffer = BytesIO() # bufor pamięciowy dla pliku PDF
+        doc = SimpleDocTemplate( #uklad strony
             buffer,
             pagesize=letter,
             rightMargin=0.5 * inch,
@@ -532,7 +526,7 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
         )
 
         styles = getSampleStyleSheet()
-        title_style = ParagraphStyle(
+        title_style = ParagraphStyle( #tytul dokumentu
             'CustomTitle',
             parent=styles['Title'],
             fontSize=24,
@@ -549,14 +543,14 @@ class ExportStatisticsPDFView(LoginRequiredMixin, View):
         elements.extend(self._create_table(mood_data, "Moods"))
         elements.extend(self._create_table(pain_data, "Average pain day level"))
 
-        doc.build(elements)
+        doc.build(elements) #generowanie i zwracanie PDF
         pdf = buffer.getvalue()
         buffer.close()
 
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = 'attachment; filename="statistics.pdf"'
         response.write(pdf)
-        return response
+        return response #pdf stworzony i gotowy do pobrania
 
 
 class KnowledgeBaseView(LoginRequiredMixin, TemplateView):

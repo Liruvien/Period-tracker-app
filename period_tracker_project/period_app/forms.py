@@ -28,6 +28,9 @@ class CustomUserCreationForm(UserCreationForm):
         }
 
     def save(self, commit=True):
+        """
+        Function to save a new user instance.
+        """
         user = super().save(commit=False)
         user.email = self.cleaned_data['email']
         user.set_password(self.cleaned_data["password1"])
@@ -207,6 +210,9 @@ class HealthAndCycleForm(forms.ModelForm):
     )
 
     def __init__(self, *args, **kwargs):
+        """
+        Initialize the form with an initial date value.
+        """
         initial_date = kwargs.get('initial', {}).get('date', timezone.now().date())
         if "initial" not in kwargs:
             kwargs["initial"] = {}
@@ -214,6 +220,13 @@ class HealthAndCycleForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
 
     def clean(self):
+        """
+        Clean and validate the form data.
+        Ensures daily_symptoms and daily_mood are properly converted to lists.
+        Note:
+            This method is called during form validation to process the raw form data
+            before it's used by the application.
+        """
         cleaned_data = super().clean()
         daily_symptoms = cleaned_data.get("daily_symptoms", [])
         daily_mood = cleaned_data.get("daily_mood", [])

@@ -12,7 +12,6 @@ from django.utils import timezone
 from period_app.models import CustomUser, UserProfile, HealthAndCycleFormModel
 
 
-
 @pytest.mark.django_db
 class TestRegisterView:
     """
@@ -126,7 +125,7 @@ class TestHomeView:
             user_profile=UserProfile.objects.get(user=user),
             menstruation_phase_start=timezone.now().date(),
             cycle_length=28,
-            period_length=5
+            period_length=6
         )
 
         response = authenticated_client.get(reverse('home'))
